@@ -55,7 +55,8 @@ def search(cfg: SearchConfig) -> list:
             origin_airport = _resolve_airport(scanner, cfg.origin.iata, cfg.origin.city)
             dest_airport = _resolve_airport(scanner, cfg.destination.iata, cfg.destination.city)
             return _run_searches(scanner, origin_airport, dest_airport, cabin, child_ages, cfg)
-        except BannedWithCaptcha:
+        except BannedWithCaptcha as e:
+            print(f"  [debug] attempt {attempt + 1} blocked: {e}")
             if attempt < 2:
                 delay = retry_delays[attempt]
                 time.sleep(delay)

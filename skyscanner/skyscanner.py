@@ -174,7 +174,9 @@ class SkyScanner:
                 suffix = req.json().get("redirect_to", "")
             except Exception:
                 suffix = ""
-            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
+            raise BannedWithCaptcha(
+                f"https://www.skyscanner.net{suffix} | body: {req.text[:300]}"
+            )
         data = orjson.loads(req.content)
 
         if data["context"]["status"] == "complete":
@@ -245,7 +247,9 @@ class SkyScanner:
                 suffix = req.json().get("redirect_to", "")
             except Exception:
                 suffix = ""
-            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
+            raise BannedWithCaptcha(
+                f"https://www.skyscanner.net{suffix} | body: {req.text[:300]}"
+            )
 
         if req.status_code != 200:
             raise GenericError(
