@@ -55,8 +55,6 @@ currency: "EUR"
 # skyscanner: no API key needed — uses reverse-engineered Android API.
 providers:
   - skyscanner
-  - duffel
-  - amadeus
   - aviationstack
 
 # --- Output ---

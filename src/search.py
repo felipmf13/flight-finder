@@ -7,8 +7,6 @@ console = Console()
 
 _PROVIDER_MODULES = {
     "skyscanner": "src.providers.skyscanner",
-    "amadeus": "src.providers.amadeus",
-    "duffel": "src.providers.duffel",
     "aviationstack": "src.providers.aviationstack",
     "scraper": "src.providers.scraper",
 }
