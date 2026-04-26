@@ -1,26 +1,24 @@
 """
 Skyscanner — reverse-engineered Android JSON API
-Source: https://github.com/irrisolto/skyscanner
+Source: https://github.com/irrisolto/skyscanner (vendored at skyscanner/)
 
 How it works:
-  Targets Skyscanner's internal mobile API (same one the Android app uses) rather than
-  scraping HTML. Uses curl_cffi for JA3/TLS fingerprinting and a built-in PerimeterX
-  challenge solver — no headless browser required, no proxies needed for casual use.
-
-Install:
-  pip install "git+https://github.com/irrisolto/skyscanner.git" curl_cffi orjson
+  Targets Skyscanner's internal mobile API (same one the Android app uses).
+  Uses curl_cffi for JA3/TLS fingerprinting and a built-in PerimeterX solver.
+  No headless browser required; no proxy needed for casual use.
 
 Optional .env vars:
   SKYSCANNER_LOCALE  — e.g. "en-GB" (default), "es-ES", "en-US"
   SKYSCANNER_MARKET  — e.g. "UK" (default), "ES", "US"
-  PROXY_URL          — http://user:pass@host:port  (for repeated runs at scale)
+  PROXY_URL          — http://user:pass@host:port  (needed for sustained/frequent runs)
 
-Caveats:
-  - Reverse-engineered; Skyscanner may change their API without notice.
-  - If you hit CAPTCHA errors repeatedly, wait a few minutes or add PROXY_URL.
+Notes:
   - price.raw from Skyscanner is the total for all passengers in the search.
+  - If blocked (403), the provider automatically retries once with a fresh PX token.
+  - Repeated blocking means Skyscanner is rate-limiting by IP — set PROXY_URL or wait.
 """
 import os
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -32,6 +30,7 @@ def search(cfg: SearchConfig) -> list:
     try:
         from skyscanner import SkyScanner
         from skyscanner.types import CabinClass
+        from skyscanner.errors import BannedWithCaptcha
     except ImportError:
         raise RuntimeError(
             "Skyscanner library not found. "
@@ -41,18 +40,35 @@ def search(cfg: SearchConfig) -> list:
 
     locale = os.getenv("SKYSCANNER_LOCALE", "en-GB")
     market = os.getenv("SKYSCANNER_MARKET", "UK")
-    proxy = os.getenv("PROXY_URL") or None
+    proxy = os.getenv("PROXY_URL", "")
 
-    scanner_kwargs = dict(locale=locale, currency=cfg.currency, market=market)
-    if proxy:
-        scanner_kwargs["proxies"] = {"http": proxy, "https": proxy}
+    def make_scanner():
+        return SkyScanner(locale=locale, currency=cfg.currency, market=market, proxy=proxy)
 
-    scanner = SkyScanner(**scanner_kwargs)
-
-    origin_airport = _resolve_airport(scanner, cfg.origin.iata, cfg.origin.city)
-    dest_airport = _resolve_airport(scanner, cfg.destination.iata, cfg.destination.city)
     cabin = _cabin_class(CabinClass, cfg.cabin_class)
-    child_ages = [7] * cfg.children + [1] * cfg.infants  # approx ages, library needs a list
+    child_ages = [7] * cfg.children + [1] * cfg.infants
+
+    # Try up to 2 times — second attempt uses a fresh PX token if the first is blocked
+    for attempt in range(2):
+        try:
+            scanner = make_scanner()
+            origin_airport = _resolve_airport(scanner, cfg.origin.iata, cfg.origin.city)
+            dest_airport = _resolve_airport(scanner, cfg.destination.iata, cfg.destination.city)
+            return _run_searches(scanner, origin_airport, dest_airport, cabin, child_ages, cfg)
+        except BannedWithCaptcha:
+            if attempt == 0:
+                time.sleep(4)
+                continue
+            raise RuntimeError(
+                "Skyscanner blocked both attempts (CAPTCHA / 403). "
+                "Wait a few minutes before retrying, or set PROXY_URL in .env."
+            )
+
+    return []
+
+
+def _run_searches(scanner, origin_airport, dest_airport, cabin, child_ages, cfg: SearchConfig) -> list:
+    from skyscanner.errors import BannedWithCaptcha
 
     all_offers: list = []
 
@@ -62,24 +78,16 @@ def search(cfg: SearchConfig) -> list:
         for in_date in (cfg.inbound_dates or [None]):
             ret_dt = datetime(in_date.year, in_date.month, in_date.day) if in_date else None
 
-            try:
-                response = scanner.get_flight_prices(
-                    origin=origin_airport,
-                    destination=dest_airport,
-                    depart_date=dep_dt,
-                    return_date=ret_dt,
-                    adults=cfg.adults,
-                    cabinClass=cabin,
-                    childAges=child_ages,
-                )
-                all_offers.extend(_parse_response(response, cfg))
-            except Exception as e:
-                if "BannedWithCaptcha" in type(e).__name__:
-                    raise RuntimeError(
-                        "Skyscanner returned a CAPTCHA challenge. "
-                        "Wait a few minutes and retry, or set PROXY_URL in .env."
-                    )
-                raise
+            response = scanner.get_flight_prices(
+                origin=origin_airport,
+                destination=dest_airport,
+                depart_date=dep_dt,
+                return_date=ret_dt,
+                adults=cfg.adults,
+                cabinClass=cabin,
+                childAges=child_ages,
+            )
+            all_offers.extend(_parse_response(response, cfg))
 
     return all_offers
 
@@ -164,7 +172,7 @@ def _parse_item(item: dict, legs_by_id: dict, cfg: SearchConfig) -> Optional[Fli
         provider="skyscanner",
         outbound=_parse_leg(outbound_leg),
         inbound=_parse_leg(inbound_leg) if inbound_leg else None,
-        price=float(price_raw),  # Skyscanner price.raw = total for all passengers
+        price=float(price_raw),
         currency=cfg.currency,
         cabin_class=cfg.cabin_class or "economy",
         adults=cfg.adults,
@@ -196,7 +204,6 @@ def _parse_leg(leg: dict) -> Itinerary:
         ))
 
     if not segments:
-        # Leg has no segment breakdown — build a single segment from leg-level data
         segments.append(Segment(
             origin=leg.get("origin", {}).get("displayCode", "???"),
             destination=leg.get("destination", {}).get("displayCode", "???"),

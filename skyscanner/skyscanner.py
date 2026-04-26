@@ -170,9 +170,11 @@ class SkyScanner:
             config.UNIFIED_SEARCH_ENDPOINT, json=json_data, headers=custom_headers
         )
         if req.status_code == 403:
-            raise BannedWithCaptcha(
-                "https://www.skyscanner.net" + req.json()["redirect_to"]
-            )
+            try:
+                suffix = req.json().get("redirect_to", "")
+            except Exception:
+                suffix = ""
+            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
         data = orjson.loads(req.content)
 
         if data["context"]["status"] == "complete":
@@ -239,9 +241,11 @@ class SkyScanner:
             },
         )
         if req.status_code == 403:
-            raise BannedWithCaptcha(
-                "https://www.skyscanner.net" + req.json()["redirect_to"]
-            )
+            try:
+                suffix = req.json().get("redirect_to", "")
+            except Exception:
+                suffix = ""
+            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
 
         if req.status_code != 200:
             raise GenericError(
@@ -283,9 +287,11 @@ class SkyScanner:
 
         req = self.session.get(url, params=params)
         if req.status_code == 403:
-            raise BannedWithCaptcha(
-                "https://www.skyscanner.net" + req.json()["redirect_to"]
-            )
+            try:
+                suffix = req.json().get("redirect_to", "")
+            except Exception:
+                suffix = ""
+            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
 
         if req.status_code != 200:
             raise GenericError(
@@ -421,9 +427,11 @@ class SkyScanner:
             config.ITINERARY_DETAILS_ENDPOINT, json=json_data, headers=headers
         )
         if req.status_code == 403:
-            raise BannedWithCaptcha(
-                "https://www.skyscanner.net" + req.json()["redirect_to"]
-            )
+            try:
+                suffix = req.json().get("redirect_to", "")
+            except Exception:
+                suffix = ""
+            raise BannedWithCaptcha("https://www.skyscanner.net" + suffix)
         if req.status_code != 200:
             raise GenericError(
                 f"Error fetching itinerary details, code: {req.status_code}, text: {req.text}"
