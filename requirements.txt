@@ -8,11 +8,8 @@ curl_cffi>=0.6.0
 typeguard>=4.0.0
 orjson>=3.9.0
 
-# --- Duffel / REST API providers ---
+# --- AviationStack (schedule reference) ---
 requests>=2.31.0
-
-# --- Amadeus fallback ---
-amadeus>=9.0.0
 
 # --- Core ---
 pyyaml>=6.0.0

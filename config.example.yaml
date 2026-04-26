@@ -111,16 +111,10 @@ currency: "EUR"
 # Schedule providers (aviationstack) always run alongside to add timing reference.
 #
 # Options:
-#   skyscanner    — Reverse-engineered Skyscanner Android API [RECOMMENDED PRIMARY]
+#   skyscanner    — Reverse-engineered Skyscanner Android API [PRIMARY]
 #                   No API key required. Uses curl_cffi TLS fingerprinting + PerimeterX solver.
-#                   Install: pip install "git+https://github.com/irrisolto/skyscanner.git" curl_cffi orjson
 #                   Optional .env vars: SKYSCANNER_LOCALE (default "en-GB"), SKYSCANNER_MARKET (default "UK")
 #                   Caveats: reverse-engineered, may break if Skyscanner updates their API.
-#   duffel        — Duffel API
-#                   Requires DUFFEL_ACCESS_TOKEN in .env. Sandbox is free; live bookings are charged.
-#   amadeus       — Amadeus for Developers
-#                   Requires AMADEUS_CLIENT_ID + AMADEUS_CLIENT_SECRET in .env.
-#                   ⚠ Self-service portal decommissioned July 17, 2026. Fallback only.
 #   aviationstack — AviationStack (schedule / status only — no prices)
 #                   Requires AVIATIONSTACK_API_KEY in .env. Free tier: 100 req/month.
 #                   Free tier returns real-time data only; future schedules need a paid plan.
@@ -128,8 +122,6 @@ currency: "EUR"
 #                   Fragile, likely violates ToS, needs rotating proxies. Last resort only.
 providers:
   - skyscanner
-  - duffel
-  - amadeus
   - aviationstack
 
 # ============================================================
