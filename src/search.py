@@ -6,6 +6,7 @@ from .filters import apply_filters
 console = Console()
 
 _PROVIDER_MODULES = {
+    "google_flights": "src.providers.google_flights",
     "skyscanner": "src.providers.skyscanner",
     "scraper": "src.providers.scraper",
 }

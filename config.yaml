@@ -4,12 +4,12 @@
 
 # --- Route ---
 origin:
-  city: "Barcelona"
-  iata: "BCN"
+  city: "London"
+  iata: "STN"
 
 destination:
-  city: "London"
-  iata: "LHR"
+  city: "Palma de Mallorca"
+  iata: "PMI"
 
 # --- Dates (YYYY-MM-DD) ---
 outbound_dates:
@@ -18,17 +18,20 @@ outbound_dates:
 
 inbound_dates:
   - "2026-07-17"
+  - "2026-07-16"
+
+
 
 # Leave inbound_dates empty (or comment it out) for a one-way search.
 
 # --- Time windows (24h, leave empty for any time) ---
 outbound_departure_window:
-  earliest: "06:00"
-  latest: "14:00"
+  earliest: "09:00"
+  latest: "21:00"
 
 inbound_departure_window:
-  earliest: ""
-  latest: ""
+  earliest: "09:00"
+  latest: "21:00"
 
 # --- Passengers ---
 adults: 1
@@ -43,7 +46,7 @@ include_airlines: []
 exclude_airlines: []
 
 # --- Stops (0 = direct only, 1 = up to 1 stop, leave empty for any) ---
-max_stops: 1
+max_stops: 0
 
 # --- Price cap per person (leave empty for no limit) ---
 max_price_per_person: 300
@@ -53,6 +56,7 @@ currency: "EUR"
 # Providers are tried in order; stops at first success.
 # skyscanner: no API key needed — uses reverse-engineered Android API.
 providers:
+  - google_flights
   - skyscanner
 
 # --- Output ---
