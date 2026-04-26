@@ -62,7 +62,7 @@ class FlightOffer:
     currency: str
     cabin_class: str
     adults: int
-    price_available: bool = True   # False for schedule-only providers (e.g. AviationStack)
+    price_available: bool = True
     raw: dict = field(default_factory=dict, repr=False)
 
     @property

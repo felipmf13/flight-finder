@@ -48,20 +48,24 @@ def search(cfg: SearchConfig) -> list:
     cabin = _cabin_class(CabinClass, cfg.cabin_class)
     child_ages = [7] * cfg.children + [1] * cfg.infants
 
-    # Try up to 2 times — second attempt uses a fresh PX token if the first is blocked
-    for attempt in range(2):
+    retry_delays = [15, 30]  # seconds between attempts; IP bans need more than a few seconds
+    for attempt in range(3):
         try:
             scanner = make_scanner()
             origin_airport = _resolve_airport(scanner, cfg.origin.iata, cfg.origin.city)
             dest_airport = _resolve_airport(scanner, cfg.destination.iata, cfg.destination.city)
             return _run_searches(scanner, origin_airport, dest_airport, cabin, child_ages, cfg)
         except BannedWithCaptcha:
-            if attempt == 0:
-                time.sleep(4)
+            if attempt < 2:
+                delay = retry_delays[attempt]
+                time.sleep(delay)
                 continue
             raise RuntimeError(
-                "Skyscanner blocked both attempts (CAPTCHA / 403). "
-                "Wait a few minutes before retrying, or set PROXY_URL in .env."
+                "Skyscanner blocked all 3 attempts (CAPTCHA / 403). "
+                "Your IP is likely rate-limited. Options:\n"
+                "  1. Wait 5–10 minutes before trying again.\n"
+                "  2. Set PROXY_URL=http://user:pass@host:port in .env.\n"
+                "  3. Try from a different network (e.g. phone hotspot)."
             )
 
     return []

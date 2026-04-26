@@ -50,12 +50,10 @@ max_price_per_person: 300
 currency: "EUR"
 
 # --- Data providers ---
-# Price providers are tried in order; stops at first success.
-# Schedule providers (aviationstack) always run alongside to supplement results.
+# Providers are tried in order; stops at first success.
 # skyscanner: no API key needed — uses reverse-engineered Android API.
 providers:
   - skyscanner
-  - aviationstack
 
 # --- Output ---
 max_results: 20

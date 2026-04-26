@@ -7,12 +7,10 @@ console = Console()
 
 _PROVIDER_MODULES = {
     "skyscanner": "src.providers.skyscanner",
-    "aviationstack": "src.providers.aviationstack",
     "scraper": "src.providers.scraper",
 }
 
-# Schedule-only providers are always run alongside (not instead of) price providers.
-_SCHEDULE_ONLY = {"aviationstack"}
+_SCHEDULE_ONLY: set = set()
 
 
 def _load(name: str):
@@ -46,7 +44,7 @@ def run_search(cfg: SearchConfig) -> list:
         except Exception as e:
             console.print(f"  [red]✗  {provider_name} failed unexpectedly: {e}[/red]")
 
-    # Schedule providers (e.g. AviationStack): always run, supplement price results
+    # Schedule providers: always run, supplement price results
     for provider_name in schedule_providers:
         console.print(f"\n[cyan]Fetching schedules via [bold]{provider_name}[/bold]...[/cyan]")
         tried.append(provider_name)

@@ -8,9 +8,6 @@ curl_cffi>=0.6.0
 typeguard>=4.0.0
 orjson>=3.9.0
 
-# --- AviationStack (schedule reference) ---
-requests>=2.31.0
-
 # --- Core ---
 pyyaml>=6.0.0
 rich>=13.7.0
