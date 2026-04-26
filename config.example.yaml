@@ -108,13 +108,16 @@ currency: "EUR"
 # Price providers are tried in order; the first one that succeeds is used.
 #
 # Options:
-#   skyscanner — Reverse-engineered Skyscanner Android API [PRIMARY]
-#                No API key required. Uses curl_cffi TLS fingerprinting + PerimeterX solver.
-#                Optional .env vars: SKYSCANNER_LOCALE (default "en-GB"), SKYSCANNER_MARKET (default "UK")
-#                Caveats: reverse-engineered, may break if Skyscanner updates their API.
-#   scraper    — Playwright headless browser (no credentials required)
-#                Fragile, likely violates ToS, needs rotating proxies. Last resort only.
+#   google_flights — Google Flights internal protobuf API [PRIMARY]
+#                    No API key required. Uses TLS fingerprinting + GDPR consent cookie.
+#                    Round trips are searched as two one-way legs and combined.
+#   skyscanner     — Skyscanner reverse-engineered Android API
+#                    No API key required, but may require PROXY_URL for sustained use.
+#                    Optional .env vars: SKYSCANNER_LOCALE, SKYSCANNER_MARKET, PROXY_URL.
+#   scraper        — Playwright headless browser (no credentials required)
+#                    Fragile, likely violates ToS, needs rotating proxies. Last resort only.
 providers:
+  - google_flights
   - skyscanner
 
 # ============================================================

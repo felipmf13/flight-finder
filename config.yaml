@@ -53,6 +53,7 @@ currency: "EUR"
 # Providers are tried in order; stops at first success.
 # skyscanner: no API key needed — uses reverse-engineered Android API.
 providers:
+  - google_flights
   - skyscanner
 
 # --- Output ---
