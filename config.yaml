@@ -1,0 +1,64 @@
+# flights/config.yaml — edit this file to define your search.
+# All fields are optional unless noted. Empty or omitted = no filter / search all.
+# See config.example.yaml for full documentation of every field.
+
+# --- Route ---
+origin:
+  city: "Barcelona"
+  iata: "BCN"
+
+destination:
+  city: "London"
+  iata: "LHR"
+
+# --- Dates (YYYY-MM-DD) ---
+outbound_dates:
+  - "2026-07-10"
+  - "2026-07-11"
+
+inbound_dates:
+  - "2026-07-17"
+
+# Leave inbound_dates empty (or comment it out) for a one-way search.
+
+# --- Time windows (24h, leave empty for any time) ---
+outbound_departure_window:
+  earliest: "06:00"
+  latest: "14:00"
+
+inbound_departure_window:
+  earliest: ""
+  latest: ""
+
+# --- Passengers ---
+adults: 1
+children: 0
+infants: 0
+
+# --- Cabin class: economy | premium_economy | business | first ---
+cabin_class: "economy"
+
+# --- Airlines (IATA codes, leave empty for all) ---
+include_airlines: []
+exclude_airlines: []
+
+# --- Stops (0 = direct only, 1 = up to 1 stop, leave empty for any) ---
+max_stops: 1
+
+# --- Price cap per person (leave empty for no limit) ---
+max_price_per_person: 300
+currency: "EUR"
+
+# --- Data providers ---
+# Price providers are tried in order; stops at first success.
+# Schedule providers (aviationstack) always run alongside to supplement results.
+# skyscanner: no API key needed — uses reverse-engineered Android API.
+providers:
+  - skyscanner
+  - duffel
+  - amadeus
+  - aviationstack
+
+# --- Output ---
+max_results: 20
+sort_by: "price"   # price | duration | departure_time

@@ -1,0 +1,143 @@
+# config.example.yaml — full reference for all supported fields.
+# Copy this file to config.yaml and fill in your values.
+# All fields are optional. Empty or omitted means "no filter / search all".
+
+# ============================================================
+# ROUTE
+# ============================================================
+
+origin:
+  city: "Barcelona"     # Human-readable label used in output headings.
+  iata: "BCN"           # IATA airport code (required by Amadeus and Duffel providers).
+                        # Leave empty only when using the scraper fallback.
+
+destination:
+  city: "London"
+  iata: ""              # Empty = any airport serving the city (LHR, LGW, STN, LCY…).
+                        # Note: Amadeus and Duffel require a specific IATA code here too.
+
+# ============================================================
+# DATES  (format: YYYY-MM-DD)
+# ============================================================
+
+# Option 1 — explicit list of dates:
+outbound_dates:
+  - "2026-07-10"
+  - "2026-07-11"
+  - "2026-07-15"
+
+# Option 2 — date range (generates one search per day in the range):
+# outbound_dates:
+#   range:
+#     from: "2026-07-10"
+#     to:   "2026-07-15"
+
+inbound_dates:
+  - "2026-07-17"
+# inbound_dates:
+#   range:
+#     from: "2026-07-17"
+#     to:   "2026-07-20"
+
+# Leave inbound_dates empty for a one-way trip search.
+# inbound_dates:
+
+# ============================================================
+# DEPARTURE TIME WINDOWS  (24h format, leave empty for any)
+# ============================================================
+
+outbound_departure_window:
+  earliest: "06:00"    # Exclude flights departing before this time.
+  latest:   "14:00"    # Exclude flights departing after this time.
+
+inbound_departure_window:
+  earliest: ""
+  latest:   ""
+
+# ============================================================
+# PASSENGERS
+# ============================================================
+
+adults: 1              # Age 12+
+children: 0            # Age 2–11  (Duffel uses approximate age 7 when only count is given)
+infants: 0             # Under 2   (lap infant, no seat)
+
+# ============================================================
+# CABIN CLASS
+# ============================================================
+
+# Options: economy | premium_economy | business | first
+# Leave empty to search all cabin classes.
+cabin_class: "economy"
+
+# ============================================================
+# AIRLINES  (IATA carrier codes)
+# ============================================================
+
+# Include only these airlines. Leave empty for all.
+# Example: ["VY", "FR", "IB"]
+include_airlines: []
+
+# Exclude these airlines. Leave empty for none excluded.
+# Example: ["W6"]
+exclude_airlines: []
+
+# ============================================================
+# STOPS
+# ============================================================
+
+# Maximum number of stops per leg.
+#   0 = direct/non-stop only
+#   1 = up to 1 stop
+# Leave empty (null) for no restriction.
+max_stops: 1
+
+# ============================================================
+# PRICE
+# ============================================================
+
+# Maximum price *per person* (covers the full round trip if inbound_dates is set).
+# Leave empty (null) for no cap.
+max_price_per_person: 300
+
+# ISO 4217 currency code for prices and the max_price_per_person cap.
+currency: "EUR"
+
+# ============================================================
+# DATA PROVIDERS
+# ============================================================
+
+# Price providers are tried in order; the first one that succeeds is used.
+# Schedule providers (aviationstack) always run alongside to add timing reference.
+#
+# Options:
+#   skyscanner    — Reverse-engineered Skyscanner Android API [RECOMMENDED PRIMARY]
+#                   No API key required. Uses curl_cffi TLS fingerprinting + PerimeterX solver.
+#                   Install: pip install "git+https://github.com/irrisolto/skyscanner.git" curl_cffi orjson
+#                   Optional .env vars: SKYSCANNER_LOCALE (default "en-GB"), SKYSCANNER_MARKET (default "UK")
+#                   Caveats: reverse-engineered, may break if Skyscanner updates their API.
+#   duffel        — Duffel API
+#                   Requires DUFFEL_ACCESS_TOKEN in .env. Sandbox is free; live bookings are charged.
+#   amadeus       — Amadeus for Developers
+#                   Requires AMADEUS_CLIENT_ID + AMADEUS_CLIENT_SECRET in .env.
+#                   ⚠ Self-service portal decommissioned July 17, 2026. Fallback only.
+#   aviationstack — AviationStack (schedule / status only — no prices)
+#                   Requires AVIATIONSTACK_API_KEY in .env. Free tier: 100 req/month.
+#                   Free tier returns real-time data only; future schedules need a paid plan.
+#   scraper       — Playwright headless browser (no credentials required)
+#                   Fragile, likely violates ToS, needs rotating proxies. Last resort only.
+providers:
+  - skyscanner
+  - duffel
+  - amadeus
+  - aviationstack
+
+# ============================================================
+# OUTPUT
+# ============================================================
+
+# Maximum number of results to display in the table.
+max_results: 20
+
+# Sort results by: price | duration | departure_time
+sort_by: "price"

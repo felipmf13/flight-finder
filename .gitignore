@@ -1,0 +1,52 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+pip-selfcheck.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Output / saved results
+data/results/
+*.csv
+*.json
+!config.example.yaml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Playwright
+playwright-report/
+test-results/
+
+# Logs
+*.log
+logs/
+
+CLAUDE.md
