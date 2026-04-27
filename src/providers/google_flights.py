@@ -62,11 +62,21 @@ def search(cfg: SearchConfig) -> list:
     # Pre-fetch cheapest inbound per return date (round-trip only)
     inbound_best: dict = {}
     inbound_fetch_errors: list = []
+    in_window = cfg.inbound_departure_window
+    use_in_window = bool(in_window.earliest or in_window.latest)
     for in_date in (cfg.inbound_dates or []):
         try:
             html = _fetch(cfg.destination.iata, cfg.origin.iata, in_date)
             flights = _parse_html(html)
-            valid = [f for f in flights if _parse_price(f["price"]) > 0]
+            valid = []
+            for f in flights:
+                if not _parse_price(f["price"]):
+                    continue
+                if use_in_window:
+                    itin = _build_itinerary(f, in_date, cfg.destination.iata, cfg.origin.iata)
+                    if not itin or not _dep_in_window(itin.departure, in_window):
+                        continue
+                valid.append(f)
             if valid:
                 best = min(valid, key=lambda f: _parse_price(f["price"]))
                 itin = _build_itinerary(best, in_date, cfg.destination.iata, cfg.origin.iata)
@@ -241,6 +251,11 @@ def _build_segments(stops: int, origin: str, dest: str, dep_dt: datetime, arr_dt
         ))
         cur = seg_arr + timedelta(minutes=45)
     return segments
+
+
+def _dep_in_window(dt: "datetime", window) -> bool:
+    from ..filters import _in_window
+    return _in_window(dt.time(), window)
 
 
 def _parse_duration(s: str) -> int:
