@@ -88,34 +88,47 @@ def _date_range(raw) -> tuple:
     return raw, raw
 
 
-def offers_to_df(offers: list) -> pd.DataFrame:
-    rows = []
-    for o in offers:
-        row: dict = {
-            "Airline": o.outbound.airline_name or o.outbound.airline,
-            "Route": f"{o.outbound.origin} → {o.outbound.destination}",
-            "Out Date": o.outbound.departure.strftime("%Y-%m-%d"),
-            "Out Dep": o.outbound.departure.strftime("%H:%M"),
-            "Out Arr": o.outbound.arrival.strftime("%H:%M"),
-            "Out Duration": f"{o.outbound.duration_minutes // 60}h {o.outbound.duration_minutes % 60:02d}m",
-            "Out Stops": o.outbound.stops,
-        }
-        if o.inbound:
-            row.update({
-                "In Date": o.inbound.departure.strftime("%Y-%m-%d"),
-                "In Dep": o.inbound.departure.strftime("%H:%M"),
-                "In Arr": o.inbound.arrival.strftime("%H:%M"),
-                "In Duration": f"{o.inbound.duration_minutes // 60}h {o.inbound.duration_minutes % 60:02d}m",
-                "In Stops": o.inbound.stops,
-            })
-        row["Price/pax"] = round(o.price_per_person, 2)
-        row["Currency"] = o.currency
-        rows.append(row)
+def _itin_row(itin, price_per_person: float, currency: str) -> dict:
+    dur = itin.duration_minutes
+    return {
+        "Airline": itin.airline_name or itin.airline,
+        "Route": f"{itin.origin} → {itin.destination}",
+        "Date": itin.departure.strftime("%Y-%m-%d"),
+        "Dep": itin.departure.strftime("%H:%M"),
+        "Arr": itin.arrival.strftime("%H:%M"),
+        "Duration": f"{dur // 60}h {dur % 60:02d}m",
+        "Stops": itin.stops,
+        "Price/pax": round(price_per_person, 2),
+        "Currency": currency,
+    }
 
+
+def outbound_to_df(offers: list) -> pd.DataFrame:
+    seen: set = set()
+    rows = []
+    for o in sorted(offers, key=lambda x: x.outbound_price):
+        key = (o.outbound.departure, o.outbound.airline_name, o.outbound.origin)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(_itin_row(o.outbound, o.outbound_price or o.price_per_person, o.currency))
     df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values("Price/pax").reset_index(drop=True)
-    return df
+    return df.reset_index(drop=True)
+
+
+def inbound_to_df(offers: list) -> pd.DataFrame:
+    seen: set = set()
+    rows = []
+    for o in sorted(offers, key=lambda x: x.inbound_price):
+        if not o.inbound:
+            continue
+        key = (o.inbound.departure, o.inbound.airline_name, o.inbound.origin)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(_itin_row(o.inbound, o.inbound_price, o.currency))
+    df = pd.DataFrame(rows)
+    return df.reset_index(drop=True)
 
 
 def main():
@@ -285,21 +298,45 @@ def main():
         return
 
     all_offers = st.session_state.search_offers
+    is_round_trip = any(o.inbound for o in all_offers)
+
     st.success(f"Found **{st.session_state.search_label}**")
 
     sort_by = st.radio("Sort by", ["Price", "Duration", "Departure time"], horizontal=True)
-    sort_key = {
-        "Price": lambda o: o.price_per_person,
+
+    out_sort_key = {
+        "Price": lambda o: o.outbound_price or o.price_per_person,
         "Duration": lambda o: o.outbound.duration_minutes,
         "Departure time": lambda o: o.outbound.departure,
     }[sort_by]
-    sorted_offers = sorted(all_offers, key=sort_key)
+    in_sort_key = {
+        "Price": lambda o: o.inbound_price,
+        "Duration": lambda o: o.inbound.duration_minutes if o.inbound else 0,
+        "Departure time": lambda o: o.inbound.departure if o.inbound else o.outbound.departure,
+    }[sort_by]
 
-    df = offers_to_df(sorted_offers)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    # ── Outbound table ──────────────────────────────────────────────────────────
+    st.subheader("Outbound flights")
+    out_df = outbound_to_df(sorted(all_offers, key=out_sort_key))
+    st.dataframe(out_df, use_container_width=True, hide_index=True)
+
+    # ── Return table ────────────────────────────────────────────────────────────
+    if is_round_trip:
+        st.subheader("Return flights")
+        in_df = inbound_to_df(sorted(all_offers, key=in_sort_key))
+        st.dataframe(in_df, use_container_width=True, hide_index=True)
+        st.caption("Total price/pax = outbound price + return price")
+
+    # ── Download ────────────────────────────────────────────────────────────────
+    import io
+    buf = io.StringIO()
+    out_df.to_csv(buf, index=False)
+    if is_round_trip:
+        buf.write("\nReturn flights\n")
+        in_df.to_csv(buf, index=False)
     st.download_button(
         "Download CSV",
-        df.to_csv(index=False).encode(),
+        buf.getvalue().encode(),
         file_name="flights.csv",
         mime="text/csv",
     )

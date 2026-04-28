@@ -105,14 +105,14 @@ def search(cfg: SearchConfig) -> list:
                 continue
 
             if not cfg.inbound_dates or not inbound_best:
-                _add(_make_offer(out_itin, None, out_price, cfg), seen, all_offers)
+                _add(_make_offer(out_itin, None, out_price, 0.0, cfg), seen, all_offers)
             else:
                 for in_date in cfg.inbound_dates:
                     if in_date not in inbound_best:
                         continue
                     in_fd, in_itin = inbound_best[in_date]
                     in_price = _parse_price(in_fd["price"])
-                    _add(_make_offer(out_itin, in_itin, out_price + in_price, cfg), seen, all_offers)
+                    _add(_make_offer(out_itin, in_itin, out_price, in_price, cfg), seen, all_offers)
 
     if inbound_fetch_errors and not inbound_best:
         raise RuntimeError(
@@ -184,13 +184,15 @@ def _add(offer, seen: set, all_offers: list) -> None:
         all_offers.append(offer)
 
 
-def _make_offer(out_itin: Itinerary, in_itin: Optional[Itinerary], price_per_person: float, cfg: SearchConfig) -> FlightOffer:
+def _make_offer(out_itin: Itinerary, in_itin: Optional[Itinerary], out_price: float, in_price: float, cfg: SearchConfig) -> FlightOffer:
     return FlightOffer(
         id=str(uuid.uuid4()),
         provider="google_flights",
         outbound=out_itin,
         inbound=in_itin,
-        price=price_per_person * cfg.adults,
+        price=(out_price + in_price) * cfg.adults,
+        outbound_price=out_price,
+        inbound_price=in_price,
         currency=cfg.currency,
         cabin_class=cfg.cabin_class or "economy",
         adults=cfg.adults,
