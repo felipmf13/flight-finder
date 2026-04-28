@@ -1,3 +1,4 @@
+import io
 import json
 import re
 import sys
@@ -34,7 +35,6 @@ def load_airports() -> dict:
             return data
 
     import csv
-    import io
     import urllib.request
 
     with urllib.request.urlopen(AIRPORTS_CSV_URL) as r:
@@ -56,7 +56,6 @@ def load_airports() -> dict:
         key = f"{municipality}, {country}"
         cities.setdefault(key, []).append({"iata": iata, "name": name, "type": airport_type})
 
-    # Sort each city: large airports first, then medium; alphabetical within each tier
     def _sort_key(a):
         return (0 if a["type"] == "large_airport" else 1, a["iata"])
 
@@ -88,47 +87,23 @@ def _date_range(raw) -> tuple:
     return raw, raw
 
 
-def _itin_row(itin, price_per_person: float, currency: str) -> dict:
-    dur = itin.duration_minutes
-    return {
-        "Airline": itin.airline_name or itin.airline,
-        "Route": f"{itin.origin} → {itin.destination}",
-        "Date": itin.departure.strftime("%Y-%m-%d"),
-        "Dep": itin.departure.strftime("%H:%M"),
-        "Arr": itin.arrival.strftime("%H:%M"),
-        "Duration": f"{dur // 60}h {dur % 60:02d}m",
-        "Stops": itin.stops,
-        "Price/pax": round(price_per_person, 2),
-        "Currency": currency,
-    }
-
-
-def outbound_to_df(offers: list) -> pd.DataFrame:
-    seen: set = set()
+def flights_to_df(offers: list) -> pd.DataFrame:
     rows = []
-    for o in sorted(offers, key=lambda x: x.outbound_price):
-        key = (o.outbound.departure, o.outbound.airline_name, o.outbound.origin)
-        if key in seen:
-            continue
-        seen.add(key)
-        rows.append(_itin_row(o.outbound, o.outbound_price or o.price_per_person, o.currency))
+    for o in offers:
+        dur = o.outbound.duration_minutes
+        rows.append({
+            "Airline": o.outbound.airline_name or o.outbound.airline,
+            "Route": f"{o.outbound.origin} → {o.outbound.destination}",
+            "Date": o.outbound.departure.strftime("%Y-%m-%d"),
+            "Dep": o.outbound.departure.strftime("%H:%M"),
+            "Arr": o.outbound.arrival.strftime("%H:%M"),
+            "Duration": f"{dur // 60}h {dur % 60:02d}m",
+            "Stops": o.outbound.stops,
+            "Price/pax": round(o.price_per_person, 2),
+            "Currency": o.currency,
+        })
     df = pd.DataFrame(rows)
-    return df.reset_index(drop=True)
-
-
-def inbound_to_df(offers: list) -> pd.DataFrame:
-    seen: set = set()
-    rows = []
-    for o in sorted(offers, key=lambda x: x.inbound_price):
-        if not o.inbound:
-            continue
-        key = (o.inbound.departure, o.inbound.airline_name, o.inbound.origin)
-        if key in seen:
-            continue
-        seen.add(key)
-        rows.append(_itin_row(o.inbound, o.inbound_price, o.currency))
-    df = pd.DataFrame(rows)
-    return df.reset_index(drop=True)
+    return df.reset_index(drop=True) if not df.empty else df
 
 
 def main():
@@ -138,9 +113,10 @@ def main():
     airports_data = load_airports()
     city_list = [""] + list(airports_data.keys())
 
-    # Persist search results across reruns (widget interactions trigger reruns)
-    if "search_offers" not in st.session_state:
-        st.session_state.search_offers = []
+    if "outbound_offers" not in st.session_state:
+        st.session_state.outbound_offers = []
+    if "inbound_offers" not in st.session_state:
+        st.session_state.inbound_offers = []
     if "search_label" not in st.session_state:
         st.session_state.search_label = ""
 
@@ -245,25 +221,29 @@ def main():
             return f"{h:02d}:00"
 
         combos = [(o, d) for o in origin_iatas for d in dest_iatas]
-        all_offers: list = []
+        all_outbound: list = []
+        all_inbound: list = []
+
+        n_out = len(outbound_dates)
+        n_in = len(inbound_dates)
+        total_steps = len(combos) * (2 if round_trip else 1)
 
         with st.status(f"Searching {len(combos)} route(s)…", expanded=True) as status:
-            for i, (orig, dest) in enumerate(combos, 1):
-                st.write(f"({i}/{len(combos)}) {orig} → {dest} — {len(outbound_dates)} outbound date(s)")
+            step = 0
+            for orig, dest in combos:
+                step += 1
+                st.write(f"({step}/{total_steps}) Outbound {orig} → {dest} — {n_out} date(s)")
                 try:
                     cfg = SearchConfig(
                         origin=AirportConfig(city=origin_city, iata=orig),
                         destination=AirportConfig(city=dest_city, iata=dest),
                         outbound_dates=outbound_dates,
-                        inbound_dates=inbound_dates,
+                        inbound_dates=[],
                         outbound_departure_window=TimeWindow(
                             earliest=_window_str(out_window[0], False),
                             latest=_window_str(out_window[1], True),
                         ),
-                        inbound_departure_window=TimeWindow(
-                            earliest=_window_str(in_window[0], False) if round_trip else "",
-                            latest=_window_str(in_window[1], True) if round_trip else "",
-                        ),
+                        inbound_departure_window=TimeWindow(earliest="", latest=""),
                         adults=adults,
                         children=children,
                         infants=infants,
@@ -278,60 +258,90 @@ def main():
                         sort_by="price",
                     )
                     offers = run_search(cfg)
-                    all_offers.extend(offers)
-                    st.write(f"  ✓ {len(offers)} offer(s)")
+                    all_outbound.extend(offers)
+                    st.write(f"  ✓ {len(offers)} flight(s)")
                 except Exception as e:
                     st.write(f"  ✗ {e}")
+
+                if round_trip:
+                    step += 1
+                    st.write(f"({step}/{total_steps}) Return {dest} → {orig} — {n_in} date(s)")
+                    try:
+                        cfg_ret = SearchConfig(
+                            origin=AirportConfig(city=dest_city, iata=dest),
+                            destination=AirportConfig(city=origin_city, iata=orig),
+                            outbound_dates=inbound_dates,
+                            inbound_dates=[],
+                            outbound_departure_window=TimeWindow(
+                                earliest=_window_str(in_window[0], False),
+                                latest=_window_str(in_window[1], True),
+                            ),
+                            inbound_departure_window=TimeWindow(earliest="", latest=""),
+                            adults=adults,
+                            children=children,
+                            infants=infants,
+                            cabin_class=CABINS[cabin_label],
+                            include_airlines=[],
+                            exclude_airlines=[],
+                            max_stops=stops_val,
+                            max_price_per_person=max_price_val,
+                            currency=currency,
+                            providers=["google_flights"],
+                            max_results=200,
+                            sort_by="price",
+                        )
+                        ret_offers = run_search(cfg_ret)
+                        all_inbound.extend(ret_offers)
+                        st.write(f"  ✓ {len(ret_offers)} flight(s)")
+                    except Exception as e:
+                        st.write(f"  ✗ {e}")
+
             status.update(label="Search complete", state="complete")
 
-        # Store in session state so results survive widget reruns
-        st.session_state.search_offers = all_offers
-        st.session_state.search_label = f"{len(all_offers)} offer(s) across {len(combos)} route(s)"
+        st.session_state.outbound_offers = all_outbound
+        st.session_state.inbound_offers = all_inbound
+        out_count = len(all_outbound)
+        in_count = len(all_inbound)
+        label = f"{out_count} outbound"
+        if round_trip:
+            label += f", {in_count} return"
+        st.session_state.search_label = label
 
-        if not all_offers:
+        if not all_outbound and not all_inbound:
             st.error("No results found. Try adjusting your filters or expanding the date range.")
             return
 
     # ── Display results (persists across reruns) ────────────────────────────────
-    if not st.session_state.search_offers:
+    if not st.session_state.outbound_offers and not st.session_state.inbound_offers:
         st.info("Configure your search in the sidebar and click **Search**.")
         return
-
-    all_offers = st.session_state.search_offers
-    is_round_trip = any(o.inbound for o in all_offers)
 
     st.success(f"Found **{st.session_state.search_label}**")
 
     sort_by = st.radio("Sort by", ["Price", "Duration", "Departure time"], horizontal=True)
-
-    out_sort_key = {
-        "Price": lambda o: o.outbound_price or o.price_per_person,
+    sort_key = {
+        "Price": lambda o: o.price_per_person,
         "Duration": lambda o: o.outbound.duration_minutes,
         "Departure time": lambda o: o.outbound.departure,
     }[sort_by]
-    in_sort_key = {
-        "Price": lambda o: o.inbound_price,
-        "Duration": lambda o: o.inbound.duration_minutes if o.inbound else 0,
-        "Departure time": lambda o: o.inbound.departure if o.inbound else o.outbound.departure,
-    }[sort_by]
 
-    # ── Outbound table ──────────────────────────────────────────────────────────
+    out_sorted = sorted(st.session_state.outbound_offers, key=sort_key)
+    in_sorted = sorted(st.session_state.inbound_offers, key=sort_key)
+
+    out_df = flights_to_df(out_sorted)
+    in_df = flights_to_df(in_sorted)
+
     st.subheader("Outbound flights")
-    out_df = outbound_to_df(sorted(all_offers, key=out_sort_key))
     st.dataframe(out_df, use_container_width=True, hide_index=True)
 
-    # ── Return table ────────────────────────────────────────────────────────────
-    if is_round_trip:
+    if st.session_state.inbound_offers:
         st.subheader("Return flights")
-        in_df = inbound_to_df(sorted(all_offers, key=in_sort_key))
         st.dataframe(in_df, use_container_width=True, hide_index=True)
-        st.caption("Total price/pax = outbound price + return price")
 
-    # ── Download ────────────────────────────────────────────────────────────────
-    import io
     buf = io.StringIO()
+    buf.write("Outbound flights\n")
     out_df.to_csv(buf, index=False)
-    if is_round_trip:
+    if st.session_state.inbound_offers:
         buf.write("\nReturn flights\n")
         in_df.to_csv(buf, index=False)
     st.download_button(
