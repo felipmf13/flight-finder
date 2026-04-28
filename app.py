@@ -106,6 +106,104 @@ def flights_to_df(offers: list) -> pd.DataFrame:
     return df.reset_index(drop=True) if not df.empty else df
 
 
+def make_flight_chart(outbound_offers: list, inbound_offers: list):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    def _hour(dt) -> float:
+        return dt.hour + dt.minute / 60
+
+    def _build_cats(dates: list) -> tuple:
+        d_to_cat: dict = {}
+        cats: list = []
+        for i, d in enumerate(dates):
+            label = f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
+            d_to_cat[d] = label
+            cats.append(label)
+            if i < len(dates) - 1 and (dates[i + 1] - d).days > 1:
+                cats.append("")  # visual gap for non-consecutive days
+        return d_to_cat, cats
+
+    all_prices = [o.price_per_person for o in outbound_offers + inbound_offers]
+    if not all_prices:
+        return None
+
+    min_p = min(all_prices)
+    max_p = max(all_prices) if max(all_prices) > min(all_prices) else min(all_prices) + 1
+    colorscale = [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
+
+    has_inbound = bool(inbound_offers)
+    n_cols = 2 if has_inbound else 1
+
+    fig = make_subplots(
+        rows=1, cols=n_cols,
+        subplot_titles=["Outbound"] + (["Return"] if has_inbound else []),
+        shared_yaxes=True,
+        horizontal_spacing=0.08,
+    )
+
+    def _add_leg(offers: list, col: int) -> None:
+        dates = sorted(set(o.outbound.departure.date() for o in offers))
+        d_to_cat, cats = _build_cats(dates)
+        currency = offers[0].currency
+
+        xs = [d_to_cat[o.outbound.departure.date()] for o in offers]
+        ys = [_hour(o.outbound.departure) for o in offers]
+        prices = [o.price_per_person for o in offers]
+        hover = [
+            f"<b>{o.outbound.airline_name}</b><br>"
+            f"{o.outbound.departure.strftime('%H:%M')} → {o.outbound.arrival.strftime('%H:%M')}<br>"
+            f"{currency} {o.price_per_person:.0f} / pax"
+            for o in offers
+        ]
+
+        is_last = col == n_cols
+        marker_cfg = dict(
+            symbol="line-ew",
+            size=22,
+            color=prices,
+            colorscale=colorscale,
+            cmin=min_p, cmax=max_p,
+            showscale=is_last,
+            line=dict(width=0),
+        )
+        if is_last:
+            marker_cfg["colorbar"] = dict(
+                title=dict(text=f"{currency}/pax", side="right"),
+                thickness=12, len=0.75, x=1.03,
+            )
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="markers",
+            marker=marker_cfg,
+            hovertext=hover, hoverinfo="text",
+            showlegend=False,
+        ), row=1, col=col)
+
+        fig.update_xaxes(
+            categoryorder="array", categoryarray=cats,
+            showgrid=False, tickfont=dict(size=11),
+            row=1, col=col,
+        )
+
+    _add_leg(outbound_offers, 1)
+    if has_inbound:
+        _add_leg(inbound_offers, 2)
+
+    tick_vals = list(range(0, 25, 2))
+    tick_text = [f"{h:02d}:00" for h in tick_vals]
+    fig.update_yaxes(
+        range=[24, 0], tickvals=tick_vals, ticktext=tick_text,
+        gridcolor="rgba(0,0,0,0.07)", zeroline=False,
+    )
+    fig.update_layout(
+        height=540, showlegend=False,
+        plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=50, b=20, l=55, r=90),
+        hoverlabel=dict(bgcolor="white", font_size=13),
+    )
+    return fig
+
+
 def main():
     st.set_page_config(page_title="Flight Finder", page_icon="✈", layout="wide")
     st.title("✈ Flight Finder")
@@ -335,6 +433,15 @@ def main():
     if st.session_state.inbound_offers:
         st.subheader("Return flights")
         st.dataframe(in_df, use_container_width=True, hide_index=True)
+
+    # ── Timeline chart ──────────────────────────────────────────────────────────
+    st.subheader("Flight timeline")
+    fig = make_flight_chart(
+        st.session_state.outbound_offers,
+        st.session_state.inbound_offers,
+    )
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
 
     buf = io.StringIO()
     buf.write("Outbound flights\n")
