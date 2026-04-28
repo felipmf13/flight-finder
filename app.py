@@ -113,6 +113,16 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
 
+    def _price_color(p: float, min_p: float, max_p: float) -> str:
+        t = max(0.0, min(1.0, (p - min_p) / (max_p - min_p) if max_p > min_p else 0.0))
+        if t <= 0.5:
+            s = t * 2
+            r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
+        else:
+            s = (t - 0.5) * 2
+            r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
+        return f"rgb({r},{g},{b})"
+
     def _build_cats(dates: list) -> tuple:
         d_to_cat: dict = {}
         cats: list = []
@@ -147,39 +157,57 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         d_to_cat, cats = _build_cats(dates)
         currency = offers[0].currency
 
-        xs = [d_to_cat[o.outbound.departure.date()] for o in offers]
-        ys = [_hour(o.outbound.departure) for o in offers]
-        prices = [o.price_per_person for o in offers]
-        hover = [
-            f"<b>{o.outbound.airline_name}</b><br>"
-            f"{o.outbound.departure.strftime('%H:%M')} → {o.outbound.arrival.strftime('%H:%M')}<br>"
-            f"{currency} {o.price_per_person:.0f} / pax"
-            for o in offers
-        ]
-
-        is_last = col == n_cols
-        marker_cfg = dict(
-            symbol="line-ew",
-            size=22,
-            color=prices,
-            colorscale=colorscale,
-            cmin=min_p, cmax=max_p,
-            showscale=is_last,
-            line=dict(width=0),
-        )
-        if is_last:
-            marker_cfg["colorbar"] = dict(
-                title=dict(text=f"{currency}/pax", side="right"),
-                thickness=12, len=0.75, x=1.03,
+        xs, bases, heights, colors, hovers = [], [], [], [], []
+        for o in offers:
+            dep_h = _hour(o.outbound.departure)
+            dur_h = min(24 - dep_h, o.outbound.duration_minutes / 60)
+            dur_h = max(0.3, dur_h)
+            xs.append(d_to_cat[o.outbound.departure.date()])
+            bases.append(dep_h)
+            heights.append(dur_h)
+            colors.append(_price_color(o.price_per_person, min_p, max_p))
+            hovers.append(
+                f"<b>{o.outbound.airline_name}</b><br>"
+                f"{o.outbound.departure.strftime('%H:%M')} → {o.outbound.arrival.strftime('%H:%M')}<br>"
+                f"{currency} {o.price_per_person:.0f} / pax"
             )
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, mode="markers",
-            marker=marker_cfg,
-            hovertext=hover, hoverinfo="text",
+
+        fig.add_trace(go.Bar(
+            x=xs,
+            y=heights,
+            base=bases,
+            marker=dict(
+                color=colors,
+                opacity=0.85,
+                line=dict(width=0.5, color="rgba(0,0,0,0.25)"),
+            ),
+            hovertext=hovers,
+            hoverinfo="text",
             showlegend=False,
         ), row=1, col=col)
 
+        # Invisible dummy scatter solely to render the colorbar
+        is_last = col == n_cols
+        if is_last:
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode="markers",
+                marker=dict(
+                    color=[min_p, max_p],
+                    colorscale=colorscale,
+                    cmin=min_p, cmax=max_p,
+                    showscale=True,
+                    colorbar=dict(
+                        title=dict(text=f"{currency}/pax", side="right"),
+                        thickness=12, len=0.75, x=1.03,
+                    ),
+                ),
+                showlegend=False,
+                hoverinfo="skip",
+            ), row=1, col=col)
+
         fig.update_xaxes(
+            type="category",
             categoryorder="array", categoryarray=cats,
             showgrid=False, tickfont=dict(size=11),
             row=1, col=col,
@@ -196,6 +224,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         gridcolor="rgba(0,0,0,0.07)", zeroline=False,
     )
     fig.update_layout(
+        barmode="overlay",
         height=540, showlegend=False,
         plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=50, b=20, l=55, r=90),
