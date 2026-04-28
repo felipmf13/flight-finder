@@ -109,6 +109,7 @@ def flights_to_df(offers: list) -> pd.DataFrame:
 def make_flight_chart(outbound_offers: list, inbound_offers: list):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
+    from collections import defaultdict
 
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
@@ -122,17 +123,6 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             s = (t - 0.5) * 2
             r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
         return f"rgb({r},{g},{b})"
-
-    def _build_cats(dates: list) -> tuple:
-        d_to_cat: dict = {}
-        cats: list = []
-        for i, d in enumerate(dates):
-            label = f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
-            d_to_cat[d] = label
-            cats.append(label)
-            if i < len(dates) - 1 and (dates[i + 1] - d).days > 1:
-                cats.append("")  # visual gap for non-consecutive days
-        return d_to_cat, cats
 
     all_prices = [o.price_per_person for o in outbound_offers + inbound_offers]
     if not all_prices:
@@ -152,19 +142,61 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         horizontal_spacing=0.08,
     )
 
+    BAR_H = 10 / 60       # each rectangle is exactly 10 minutes tall
+    FULL_W = 0.8          # fraction of column width available for bars
+
     def _add_leg(offers: list, col: int) -> None:
         dates = sorted(set(o.outbound.departure.date() for o in offers))
-        d_to_cat, cats = _build_cats(dates)
         currency = offers[0].currency
 
-        xs, bases, heights, colors, hovers = [], [], [], [], []
+        # Numeric x-axis: consecutive days → x += 1, non-consecutive → x += 2 (visible gap)
+        date_to_x: dict = {}
+        tick_vals_x: list = []
+        tick_texts_x: list = []
+        x = 0
+        for i, d in enumerate(dates):
+            date_to_x[d] = x
+            tick_vals_x.append(x)
+            tick_texts_x.append(f"{d.strftime('%a')} {d.day} {d.strftime('%b')}")
+            if i < len(dates) - 1:
+                x += 2 if (dates[i + 1] - d).days > 1 else 1
+
+        # Greedy lane packing per day: flights that overlap get different lanes
+        by_date: dict = defaultdict(list)
         for o in offers:
+            by_date[o.outbound.departure.date()].append(o)
+
+        lane_idx: dict = {}   # id(offer) → lane number
+        n_lanes: dict = {}    # date → total lanes used
+        for d, day_offers in by_date.items():
+            lane_ends: list = []  # earliest time a lane is free again
+            for o in sorted(day_offers, key=lambda o: o.outbound.departure):
+                dep_h = _hour(o.outbound.departure)
+                placed = False
+                for li, le in enumerate(lane_ends):
+                    if dep_h >= le:
+                        lane_ends[li] = dep_h + BAR_H
+                        lane_idx[id(o)] = li
+                        placed = True
+                        break
+                if not placed:
+                    lane_idx[id(o)] = len(lane_ends)
+                    lane_ends.append(dep_h + BAR_H)
+            n_lanes[d] = len(lane_ends)
+
+        # Build per-bar arrays with computed x centre and width
+        xs, ys, bases, widths, colors, hovers = [], [], [], [], [], []
+        for o in offers:
+            d = o.outbound.departure.date()
             dep_h = _hour(o.outbound.departure)
-            dur_h = min(24 - dep_h, o.outbound.duration_minutes / 60)
-            dur_h = max(0.3, dur_h)
-            xs.append(d_to_cat[o.outbound.departure.date()])
+            n = n_lanes[d]
+            lane = lane_idx[id(o)]
+            bar_w = FULL_W / n
+            x_centre = date_to_x[d] + (lane - (n - 1) / 2) * bar_w
+            xs.append(x_centre)
             bases.append(dep_h)
-            heights.append(dur_h)
+            ys.append(BAR_H)
+            widths.append(bar_w * 0.92)   # small gap between sibling lanes
             colors.append(_price_color(o.price_per_person, min_p, max_p))
             hovers.append(
                 f"<b>{o.outbound.airline_name}</b><br>"
@@ -173,42 +205,31 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             )
 
         fig.add_trace(go.Bar(
-            x=xs,
-            y=heights,
-            base=bases,
-            marker=dict(
-                color=colors,
-                opacity=0.85,
-                line=dict(width=0.5, color="rgba(0,0,0,0.25)"),
-            ),
-            hovertext=hovers,
-            hoverinfo="text",
+            x=xs, y=ys, base=bases, width=widths,
+            marker=dict(color=colors, opacity=0.9, line=dict(width=0.5, color="rgba(0,0,0,0.2)")),
+            hovertext=hovers, hoverinfo="text",
             showlegend=False,
         ), row=1, col=col)
 
-        # Invisible dummy scatter solely to render the colorbar
-        is_last = col == n_cols
-        if is_last:
+        # Dummy invisible scatter — solely to attach the price colorbar
+        if col == n_cols:
             fig.add_trace(go.Scatter(
-                x=[None], y=[None],
-                mode="markers",
+                x=[None], y=[None], mode="markers",
                 marker=dict(
-                    color=[min_p, max_p],
-                    colorscale=colorscale,
-                    cmin=min_p, cmax=max_p,
-                    showscale=True,
+                    color=[min_p, max_p], colorscale=colorscale,
+                    cmin=min_p, cmax=max_p, showscale=True,
                     colorbar=dict(
                         title=dict(text=f"{currency}/pax", side="right"),
                         thickness=12, len=0.75, x=1.03,
                     ),
                 ),
-                showlegend=False,
-                hoverinfo="skip",
+                showlegend=False, hoverinfo="skip",
             ), row=1, col=col)
 
+        x_max = max(tick_vals_x) if tick_vals_x else 0
         fig.update_xaxes(
-            type="category",
-            categoryorder="array", categoryarray=cats,
+            tickmode="array", tickvals=tick_vals_x, ticktext=tick_texts_x,
+            range=[-0.6, x_max + 0.6],
             showgrid=False, tickfont=dict(size=11),
             row=1, col=col,
         )
@@ -217,17 +238,17 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
     if has_inbound:
         _add_leg(inbound_offers, 2)
 
-    tick_vals = list(range(0, 25, 2))
-    tick_text = [f"{h:02d}:00" for h in tick_vals]
+    tick_vals_y = list(range(0, 25))
+    tick_text_y = [f"{h:02d}:00" for h in tick_vals_y]
     fig.update_yaxes(
-        range=[24, 0], tickvals=tick_vals, ticktext=tick_text,
-        gridcolor="rgba(0,0,0,0.07)", zeroline=False,
+        range=[24, 0], tickvals=tick_vals_y, ticktext=tick_text_y,
+        gridcolor="rgba(0,0,0,0.08)", zeroline=False, tickfont=dict(size=10),
     )
     fig.update_layout(
         barmode="overlay",
-        height=540, showlegend=False,
+        height=660, showlegend=False,
         plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=50, b=20, l=55, r=90),
+        margin=dict(t=50, b=20, l=60, r=90),
         hoverlabel=dict(bgcolor="white", font_size=13),
     )
     return fig
