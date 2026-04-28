@@ -58,11 +58,13 @@ class FlightOffer:
     provider: str
     outbound: Itinerary
     inbound: Optional[Itinerary]
-    price: float           # Total for all passengers
+    price: float                    # Total for all passengers (both legs)
     currency: str
     cabin_class: str
     adults: int
     price_available: bool = True
+    outbound_price: float = 0.0     # Per-person outbound leg price
+    inbound_price: float = 0.0      # Per-person inbound leg price
     raw: dict = field(default_factory=dict, repr=False)
 
     @property
