@@ -106,6 +106,154 @@ def flights_to_df(offers: list) -> pd.DataFrame:
     return df.reset_index(drop=True) if not df.empty else df
 
 
+def make_flight_chart(outbound_offers: list, inbound_offers: list):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    from collections import defaultdict
+
+    def _hour(dt) -> float:
+        return dt.hour + dt.minute / 60
+
+    def _price_color(p: float, min_p: float, max_p: float) -> str:
+        t = max(0.0, min(1.0, (p - min_p) / (max_p - min_p) if max_p > min_p else 0.0))
+        if t <= 0.5:
+            s = t * 2
+            r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
+        else:
+            s = (t - 0.5) * 2
+            r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
+        return f"rgb({r},{g},{b})"
+
+    all_prices = [o.price_per_person for o in outbound_offers + inbound_offers]
+    if not all_prices:
+        return None
+
+    min_p = min(all_prices)
+    max_p = max(all_prices) if max(all_prices) > min(all_prices) else min(all_prices) + 1
+    colorscale = [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
+
+    has_inbound = bool(inbound_offers)
+    n_cols = 2 if has_inbound else 1
+
+    fig = make_subplots(
+        rows=1, cols=n_cols,
+        subplot_titles=["Outbound"] + (["Return"] if has_inbound else []),
+        shared_yaxes=True,
+        horizontal_spacing=0.08,
+    )
+
+    BAR_H = 10 / 60       # each rectangle is exactly 10 minutes tall
+    FULL_W = 0.8          # fraction of column width available for bars
+
+    def _add_leg(offers: list, col: int) -> None:
+        dates = sorted(set(o.outbound.departure.date() for o in offers))
+        currency = offers[0].currency
+
+        # Numeric x-axis: consecutive days → x += 1, non-consecutive → x += 2 (visible gap)
+        date_to_x: dict = {}
+        tick_vals_x: list = []
+        tick_texts_x: list = []
+        x = 0
+        for i, d in enumerate(dates):
+            date_to_x[d] = x
+            tick_vals_x.append(x)
+            tick_texts_x.append(f"{d.strftime('%a')} {d.day} {d.strftime('%b')}")
+            if i < len(dates) - 1:
+                x += 2 if (dates[i + 1] - d).days > 1 else 1
+
+        # Greedy lane packing per day: flights that overlap get different lanes
+        by_date: dict = defaultdict(list)
+        for o in offers:
+            by_date[o.outbound.departure.date()].append(o)
+
+        lane_idx: dict = {}   # id(offer) → lane number
+        n_lanes: dict = {}    # date → total lanes used
+        for d, day_offers in by_date.items():
+            lane_ends: list = []  # earliest time a lane is free again
+            for o in sorted(day_offers, key=lambda o: o.outbound.departure):
+                dep_h = _hour(o.outbound.departure)
+                placed = False
+                for li, le in enumerate(lane_ends):
+                    if dep_h >= le:
+                        lane_ends[li] = dep_h + BAR_H
+                        lane_idx[id(o)] = li
+                        placed = True
+                        break
+                if not placed:
+                    lane_idx[id(o)] = len(lane_ends)
+                    lane_ends.append(dep_h + BAR_H)
+            n_lanes[d] = len(lane_ends)
+
+        # Build per-bar arrays with computed x centre and width
+        xs, ys, bases, widths, colors, hovers = [], [], [], [], [], []
+        for o in offers:
+            d = o.outbound.departure.date()
+            dep_h = _hour(o.outbound.departure)
+            n = n_lanes[d]
+            lane = lane_idx[id(o)]
+            bar_w = FULL_W / n
+            x_centre = date_to_x[d] + (lane - (n - 1) / 2) * bar_w
+            xs.append(x_centre)
+            bases.append(dep_h)
+            ys.append(BAR_H)
+            widths.append(bar_w * 0.92)   # small gap between sibling lanes
+            colors.append(_price_color(o.price_per_person, min_p, max_p))
+            hovers.append(
+                f"<b>{o.outbound.airline_name}</b><br>"
+                f"{o.outbound.departure.strftime('%H:%M')} → {o.outbound.arrival.strftime('%H:%M')}<br>"
+                f"{currency} {o.price_per_person:.0f} / pax"
+            )
+
+        fig.add_trace(go.Bar(
+            x=xs, y=ys, base=bases, width=widths,
+            marker=dict(color=colors, opacity=0.9, line=dict(width=0.5, color="rgba(0,0,0,0.2)")),
+            hovertext=hovers, hoverinfo="text",
+            showlegend=False,
+        ), row=1, col=col)
+
+        # Dummy invisible scatter — solely to attach the price colorbar
+        if col == n_cols:
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="markers",
+                marker=dict(
+                    color=[min_p, max_p], colorscale=colorscale,
+                    cmin=min_p, cmax=max_p, showscale=True,
+                    colorbar=dict(
+                        title=dict(text=f"{currency}/pax", side="right"),
+                        thickness=12, len=0.75, x=1.03,
+                    ),
+                ),
+                showlegend=False, hoverinfo="skip",
+            ), row=1, col=col)
+
+        x_max = max(tick_vals_x) if tick_vals_x else 0
+        fig.update_xaxes(
+            tickmode="array", tickvals=tick_vals_x, ticktext=tick_texts_x,
+            range=[-0.6, x_max + 0.6],
+            showgrid=False, tickfont=dict(size=11),
+            row=1, col=col,
+        )
+
+    _add_leg(outbound_offers, 1)
+    if has_inbound:
+        _add_leg(inbound_offers, 2)
+
+    tick_vals_y = list(range(0, 25))
+    tick_text_y = [f"{h:02d}:00" for h in tick_vals_y]
+    fig.update_yaxes(
+        range=[24, 0], tickvals=tick_vals_y, ticktext=tick_text_y,
+        gridcolor="rgba(0,0,0,0.08)", zeroline=False, tickfont=dict(size=10),
+    )
+    fig.update_layout(
+        barmode="overlay",
+        height=660, showlegend=False,
+        plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=50, b=20, l=60, r=90),
+        hoverlabel=dict(bgcolor="white", font_size=13),
+    )
+    return fig
+
+
 def main():
     st.set_page_config(page_title="Flight Finder", page_icon="✈", layout="wide")
     st.title("✈ Flight Finder")
@@ -335,6 +483,15 @@ def main():
     if st.session_state.inbound_offers:
         st.subheader("Return flights")
         st.dataframe(in_df, use_container_width=True, hide_index=True)
+
+    # ── Timeline chart ──────────────────────────────────────────────────────────
+    st.subheader("Flight timeline")
+    fig = make_flight_chart(
+        st.session_state.outbound_offers,
+        st.session_state.inbound_offers,
+    )
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
 
     buf = io.StringIO()
     buf.write("Outbound flights\n")

@@ -19,6 +19,7 @@ pandas>=2.2.0
 
 # --- Web UI ---
 streamlit>=1.26.0
+plotly>=5.0.0
 
 # --- Playwright scraper (last resort, install chromium separately) ---
 # playwright>=1.44.0
