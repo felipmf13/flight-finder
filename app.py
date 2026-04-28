@@ -167,7 +167,6 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             by_date[o.outbound.departure.date()].append(o)
 
         lane_idx: dict = {}   # id(offer) → lane number
-        n_lanes: dict = {}    # date → total lanes used
         for d, day_offers in by_date.items():
             lane_ends: list = []  # earliest time a lane is free again
             for o in sorted(day_offers, key=lambda o: o.outbound.departure):
@@ -182,14 +181,29 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                 if not placed:
                     lane_idx[id(o)] = len(lane_ends)
                     lane_ends.append(dep_h + BAR_H)
-            n_lanes[d] = len(lane_ends)
+
+        # Local concurrency: for each flight, the width is determined only by
+        # the flights whose 10-min windows actually overlap with it — flights at
+        # non-clashing times keep their full column width.
+        local_n: dict = {}    # id(offer) → concurrent lane count at this flight's slot
+        for d, day_offers in by_date.items():
+            offer_list = list(day_offers)
+            for o in offer_list:
+                dep_h = _hour(o.outbound.departure)
+                end_h = dep_h + BAR_H
+                max_lane = lane_idx[id(o)]
+                for o2 in offer_list:
+                    dep2 = _hour(o2.outbound.departure)
+                    if dep_h < dep2 + BAR_H and dep2 < end_h:  # windows overlap
+                        max_lane = max(max_lane, lane_idx[id(o2)])
+                local_n[id(o)] = max_lane + 1
 
         # Build per-bar arrays with computed x centre and width
         xs, ys, bases, widths, colors, hovers = [], [], [], [], [], []
         for o in offers:
             d = o.outbound.departure.date()
             dep_h = _hour(o.outbound.departure)
-            n = n_lanes[d]
+            n = local_n[id(o)]
             lane = lane_idx[id(o)]
             bar_w = FULL_W / n
             x_centre = date_to_x[d] + (lane - (n - 1) / 2) * bar_w
