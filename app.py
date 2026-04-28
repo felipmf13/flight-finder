@@ -132,8 +132,7 @@ def main():
         if origin_city:
             city_airports = airports_data[origin_city]
             opts = [f"{a['iata']} – {a['name']}" for a in city_airports]
-            default_opts = [f"{a['iata']} – {a['name']}" for a in _large_airports(city_airports)]
-            sel = st.multiselect("Origin airport(s)", opts, default=default_opts)
+            sel = st.multiselect("Origin airport(s)", opts, default=opts)
             origin_iatas = [s.split(" – ")[0] for s in sel]
 
         dest_city = st.selectbox("Destination city", city_list, index=0)
@@ -141,8 +140,7 @@ def main():
         if dest_city:
             city_airports = airports_data[dest_city]
             opts = [f"{a['iata']} – {a['name']}" for a in city_airports]
-            default_opts = [f"{a['iata']} – {a['name']}" for a in _large_airports(city_airports)]
-            sel = st.multiselect("Destination airport(s)", opts, default=default_opts)
+            sel = st.multiselect("Destination airport(s)", opts, default=opts)
             dest_iatas = [s.split(" – ")[0] for s in sel]
 
         st.subheader("Dates")
@@ -151,16 +149,16 @@ def main():
 
         out_raw = st.date_input(
             "Outbound dates",
-            value=(today + timedelta(days=7), today + timedelta(days=14)),
+            value=(today, today),
             min_value=today,
         )
         out_start, out_end = _date_range(out_raw)
 
-        in_start = in_end = today + timedelta(days=21)
+        in_start = in_end = today
         if round_trip:
             in_raw = st.date_input(
                 "Return dates",
-                value=(today + timedelta(days=14), today + timedelta(days=21)),
+                value=(today, today),
                 min_value=today,
             )
             in_start, in_end = _date_range(in_raw)
