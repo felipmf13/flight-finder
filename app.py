@@ -171,17 +171,8 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         horizontal_spacing=0.08,
     )
 
-    MIN_BAR_H = 10 / 60   # direct flights: 10-minute indicator bar
+    BAR_H = 10 / 60       # every rectangle is exactly 10 minutes tall
     FULL_W = 0.8          # fraction of column width available for bars
-
-    def _bar_h(o) -> float:
-        if o.outbound.stops == 0:
-            return MIN_BAR_H
-        dep_h = _hour(o.outbound.departure)
-        arr_h = _hour(o.outbound.arrival)
-        if arr_h <= dep_h:   # overnight: clip at midnight
-            arr_h = 24.0
-        return max(MIN_BAR_H, arr_h - dep_h)
 
     def _add_leg(offers: list, col: int) -> None:
         dates = sorted(set(o.outbound.departure.date() for o in offers))
@@ -199,12 +190,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             if i < len(dates) - 1:
                 x += 2 if (dates[i + 1] - d).days > 1 else 1
 
-        # Pre-compute actual bar end-time per offer for lane packing & local_n
-        end_h_of: dict = {}
-        for o in offers:
-            end_h_of[id(o)] = _hour(o.outbound.departure) + _bar_h(o)
-
-        # Greedy lane packing per day using actual bar end times
+        # Greedy lane packing per day
         by_date: dict = defaultdict(list)
         for o in offers:
             by_date[o.outbound.departure.date()].append(o)
@@ -214,30 +200,28 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             lane_ends: list = []
             for o in sorted(day_offers, key=lambda o: o.outbound.departure):
                 dep_h = _hour(o.outbound.departure)
-                end_h = end_h_of[id(o)]
                 placed = False
                 for li, le in enumerate(lane_ends):
                     if dep_h >= le:
-                        lane_ends[li] = end_h
+                        lane_ends[li] = dep_h + BAR_H
                         lane_idx[id(o)] = li
                         placed = True
                         break
                 if not placed:
                     lane_idx[id(o)] = len(lane_ends)
-                    lane_ends.append(end_h)
+                    lane_ends.append(dep_h + BAR_H)
 
-        # Local concurrency: width determined only by flights whose bars actually overlap
+        # Local concurrency: width shrinks only for flights that actually overlap
         local_n: dict = {}
         for d, day_offers in by_date.items():
             offer_list = list(day_offers)
             for o in offer_list:
                 dep_h = _hour(o.outbound.departure)
-                end_h = end_h_of[id(o)]
+                end_h = dep_h + BAR_H
                 max_lane = lane_idx[id(o)]
                 for o2 in offer_list:
                     dep2 = _hour(o2.outbound.departure)
-                    end2 = end_h_of[id(o2)]
-                    if dep_h < end2 and dep2 < end_h:
+                    if dep_h < dep2 + BAR_H and dep2 < end_h:
                         max_lane = max(max_lane, lane_idx[id(o2)])
                 local_n[id(o)] = max_lane + 1
 
@@ -247,14 +231,13 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         for o in offers:
             d = o.outbound.departure.date()
             dep_h = _hour(o.outbound.departure)
-            bh = _bar_h(o)
             n = local_n[id(o)]
             lane = lane_idx[id(o)]
             bar_w = FULL_W / n
             x_centre = date_to_x[d] + (lane - (n - 1) / 2) * bar_w
             xs.append(x_centre)
             bases.append(dep_h)
-            ys.append(bh)
+            ys.append(BAR_H)
             widths.append(bar_w * 0.92)
             colors.append(_price_color(o.price_per_person, min_p, max_p))
             stops_label = f"{o.outbound.stops} stop{'s' if o.outbound.stops != 1 else ''}" if o.outbound.stops else "Direct"
