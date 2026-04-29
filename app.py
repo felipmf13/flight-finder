@@ -87,23 +87,55 @@ def _date_range(raw) -> tuple:
     return raw, raw
 
 
-def flights_to_df(offers: list) -> pd.DataFrame:
+def flights_to_df(offers: list) -> tuple:
+    """Return (DataFrame, list[bool]) where True marks a segment sub-row (yellowish)."""
     rows = []
+    is_stop: list = []
     for o in offers:
-        dur = o.outbound.duration_minutes
-        rows.append({
-            "Airline": o.outbound.airline_name or o.outbound.airline,
-            "Route": f"{o.outbound.origin} → {o.outbound.destination}",
-            "Date": o.outbound.departure.strftime("%Y-%m-%d"),
-            "Dep": o.outbound.departure.strftime("%H:%M"),
-            "Arr": o.outbound.arrival.strftime("%H:%M"),
-            "Duration": f"{dur // 60}h {dur % 60:02d}m",
-            "Stops": o.outbound.stops,
-            "Price/pax": round(o.price_per_person, 2),
-            "Currency": o.currency,
-        })
+        segments = o.outbound.segments
+        if len(segments) <= 1:
+            dur = o.outbound.duration_minutes
+            rows.append({
+                "Airline": o.outbound.airline_name or o.outbound.airline,
+                "Route": f"{o.outbound.origin} → {o.outbound.destination}",
+                "Date": o.outbound.departure.strftime("%Y-%m-%d"),
+                "Dep": o.outbound.departure.strftime("%H:%M"),
+                "Arr": o.outbound.arrival.strftime("%H:%M"),
+                "Duration": f"{dur // 60}h {dur % 60:02d}m",
+                "Stops": "Direct",
+                "Price/pax": round(o.price_per_person),
+                "Currency": o.currency,
+            })
+            is_stop.append(False)
+        else:
+            n_legs = len(segments)
+            for i, seg in enumerate(segments):
+                dur = seg.duration_minutes
+                rows.append({
+                    "Airline": seg.airline_name or seg.airline,
+                    "Route": f"{seg.origin} → {seg.destination}",
+                    "Date": seg.departure.strftime("%Y-%m-%d") if i == 0 else "↳",
+                    "Dep": seg.departure.strftime("%H:%M"),
+                    "Arr": seg.arrival.strftime("%H:%M"),
+                    "Duration": f"{dur // 60}h {dur % 60:02d}m",
+                    "Stops": f"{n_legs - 1} stop{'s' if n_legs > 2 else ''}" if i == 0 else f"↳ leg {i + 1}/{n_legs}",
+                    "Price/pax": round(o.price_per_person) if i == 0 else None,
+                    "Currency": o.currency if i == 0 else "",
+                })
+                is_stop.append(True)
     df = pd.DataFrame(rows)
-    return df.reset_index(drop=True) if not df.empty else df
+    if not df.empty:
+        df = df.reset_index(drop=True)
+        df["Price/pax"] = df["Price/pax"].astype("Int64")
+    return df, is_stop
+
+
+def _apply_stop_style(df: pd.DataFrame, is_stop: list):
+    if not any(is_stop):
+        return df
+    def _row_bg(row):
+        return ["background-color: #fffbe6" if is_stop[row.name] else "" for _ in row]
+    return df.style.apply(_row_bg, axis=1)
 
 
 def make_flight_chart(outbound_offers: list, inbound_offers: list):
@@ -142,7 +174,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         horizontal_spacing=0.08,
     )
 
-    BAR_H = 10 / 60       # each rectangle is exactly 10 minutes tall
+    BAR_H = 10 / 60       # every rectangle is exactly 10 minutes tall
     FULL_W = 0.8          # fraction of column width available for bars
 
     def _add_leg(offers: list, col: int) -> None:
@@ -161,14 +193,14 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             if i < len(dates) - 1:
                 x += 2 if (dates[i + 1] - d).days > 1 else 1
 
-        # Greedy lane packing per day: flights that overlap get different lanes
+        # Greedy lane packing per day
         by_date: dict = defaultdict(list)
         for o in offers:
             by_date[o.outbound.departure.date()].append(o)
 
-        lane_idx: dict = {}   # id(offer) → lane number
+        lane_idx: dict = {}
         for d, day_offers in by_date.items():
-            lane_ends: list = []  # earliest time a lane is free again
+            lane_ends: list = []
             for o in sorted(day_offers, key=lambda o: o.outbound.departure):
                 dep_h = _hour(o.outbound.departure)
                 placed = False
@@ -182,10 +214,8 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                     lane_idx[id(o)] = len(lane_ends)
                     lane_ends.append(dep_h + BAR_H)
 
-        # Local concurrency: for each flight, the width is determined only by
-        # the flights whose 10-min windows actually overlap with it — flights at
-        # non-clashing times keep their full column width.
-        local_n: dict = {}    # id(offer) → concurrent lane count at this flight's slot
+        # Local concurrency: width shrinks only for flights that actually overlap
+        local_n: dict = {}
         for d, day_offers in by_date.items():
             offer_list = list(day_offers)
             for o in offer_list:
@@ -194,12 +224,13 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                 max_lane = lane_idx[id(o)]
                 for o2 in offer_list:
                     dep2 = _hour(o2.outbound.departure)
-                    if dep_h < dep2 + BAR_H and dep2 < end_h:  # windows overlap
+                    if dep_h < dep2 + BAR_H and dep2 < end_h:
                         max_lane = max(max_lane, lane_idx[id(o2)])
                 local_n[id(o)] = max_lane + 1
 
-        # Build per-bar arrays with computed x centre and width
+        # Build per-bar arrays
         xs, ys, bases, widths, colors, hovers = [], [], [], [], [], []
+        border_colors, border_widths = [], []
         for o in offers:
             d = o.outbound.departure.date()
             dep_h = _hour(o.outbound.departure)
@@ -210,17 +241,27 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             xs.append(x_centre)
             bases.append(dep_h)
             ys.append(BAR_H)
-            widths.append(bar_w * 0.92)   # small gap between sibling lanes
+            widths.append(bar_w * 0.92)
             colors.append(_price_color(o.price_per_person, min_p, max_p))
+            stops_label = f"{o.outbound.stops} stop{'s' if o.outbound.stops != 1 else ''}" if o.outbound.stops else "Direct"
             hovers.append(
-                f"<b>{o.outbound.airline_name}</b><br>"
+                f"<b>{o.outbound.airline_name}</b> · {stops_label}<br>"
                 f"{o.outbound.departure.strftime('%H:%M')} → {o.outbound.arrival.strftime('%H:%M')}<br>"
                 f"{currency} {o.price_per_person:.0f} / pax"
             )
+            if o.outbound.stops > 0:
+                border_colors.append("rgba(0,0,0,0.85)")
+                border_widths.append(1.5)
+            else:
+                border_colors.append("rgba(0,0,0,0.15)")
+                border_widths.append(0.4)
 
         fig.add_trace(go.Bar(
             x=xs, y=ys, base=bases, width=widths,
-            marker=dict(color=colors, opacity=0.9, line=dict(width=0.5, color="rgba(0,0,0,0.2)")),
+            marker=dict(
+                color=colors, opacity=0.9,
+                line=dict(color=border_colors, width=border_widths),
+            ),
             hovertext=hovers, hoverinfo="text",
             showlegend=False,
         ), row=1, col=col)
@@ -488,15 +529,15 @@ def main():
     out_sorted = sorted(st.session_state.outbound_offers, key=sort_key)
     in_sorted = sorted(st.session_state.inbound_offers, key=sort_key)
 
-    out_df = flights_to_df(out_sorted)
-    in_df = flights_to_df(in_sorted)
+    out_df, out_stop = flights_to_df(out_sorted)
+    in_df, in_stop = flights_to_df(in_sorted)
 
     st.subheader("Outbound flights")
-    st.dataframe(out_df, use_container_width=True, hide_index=True)
+    st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True)
 
     if st.session_state.inbound_offers:
         st.subheader("Return flights")
-        st.dataframe(in_df, use_container_width=True, hide_index=True)
+        st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True)
 
     # ── Timeline chart ──────────────────────────────────────────────────────────
     st.subheader("Flight timeline")
@@ -513,6 +554,7 @@ def main():
     if st.session_state.inbound_offers:
         buf.write("\nReturn flights\n")
         in_df.to_csv(buf, index=False)
+
     st.download_button(
         "Download CSV",
         buf.getvalue().encode(),
