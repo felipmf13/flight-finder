@@ -103,7 +103,7 @@ def flights_to_df(offers: list) -> tuple:
                 "Arr": o.outbound.arrival.strftime("%H:%M"),
                 "Duration": f"{dur // 60}h {dur % 60:02d}m",
                 "Stops": "Direct",
-                "Price/pax": round(o.price_per_person, 2),
+                "Price/pax": round(o.price_per_person),
                 "Currency": o.currency,
             })
             is_stop.append(False)
@@ -119,7 +119,7 @@ def flights_to_df(offers: list) -> tuple:
                     "Arr": seg.arrival.strftime("%H:%M"),
                     "Duration": f"{dur // 60}h {dur % 60:02d}m",
                     "Stops": f"{n_legs - 1} stop{'s' if n_legs > 2 else ''}" if i == 0 else f"↳ leg {i + 1}/{n_legs}",
-                    "Price/pax": round(o.price_per_person, 2) if i == 0 else None,
+                    "Price/pax": round(o.price_per_person) if i == 0 else None,
                     "Currency": o.currency if i == 0 else "",
                 })
                 is_stop.append(True)
