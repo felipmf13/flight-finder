@@ -124,7 +124,10 @@ def flights_to_df(offers: list) -> tuple:
                 })
                 is_stop.append(True)
     df = pd.DataFrame(rows)
-    return (df.reset_index(drop=True) if not df.empty else df), is_stop
+    if not df.empty:
+        df = df.reset_index(drop=True)
+        df["Price/pax"] = df["Price/pax"].astype("Int64")
+    return df, is_stop
 
 
 def _apply_stop_style(df: pd.DataFrame, is_stop: list):
