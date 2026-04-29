@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 AIRPORTS_PATH = Path("data/airports.json")
 AIRPORTS_CSV_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"
 
-CURRENCIES = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK"]
+CURRENCIES = ["GBP", "EUR", "USD", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK"]
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 CABINS = {
     "Economy": "economy",
@@ -382,7 +382,7 @@ def main():
         cabin_label = st.selectbox("Cabin", list(CABINS.keys()))
 
         st.subheader("Filters")
-        stops_label = st.selectbox("Max stops", ["Any", "Direct only", "Up to 1 stop"])
+        stops_label = st.selectbox("Max stops", ["Direct only", "Up to 1 stop", "Any"])
         stops_val = {"Any": None, "Direct only": 0, "Up to 1 stop": 1}[stops_label]
         max_price_input = int(st.number_input("Max price/person (0 = no limit)", 0, 10000, 0, step=50))
         max_price_val = float(max_price_input) if max_price_input > 0 else None
