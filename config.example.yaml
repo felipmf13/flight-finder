@@ -111,14 +111,10 @@ currency: "EUR"
 #   google_flights — Google Flights internal protobuf API [PRIMARY]
 #                    No API key required. Uses TLS fingerprinting + GDPR consent cookie.
 #                    Round trips are searched as two one-way legs and combined.
-#   skyscanner     — Skyscanner reverse-engineered Android API
-#                    No API key required, but may require PROXY_URL for sustained use.
-#                    Optional .env vars: SKYSCANNER_LOCALE, SKYSCANNER_MARKET, PROXY_URL.
 #   scraper        — Playwright headless browser (no credentials required)
 #                    Fragile, likely violates ToS, needs rotating proxies. Last resort only.
 providers:
   - google_flights
-  - skyscanner
 
 # ============================================================
 # OUTPUT

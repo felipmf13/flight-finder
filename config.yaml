@@ -53,11 +53,8 @@ max_price_per_person: 300
 currency: "EUR"
 
 # --- Data providers ---
-# Providers are tried in order; stops at first success.
-# skyscanner: no API key needed — uses reverse-engineered Android API.
 providers:
   - google_flights
-  - skyscanner
 
 # --- Output ---
 max_results: 20
