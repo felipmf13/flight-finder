@@ -1,14 +1,20 @@
+import bisect
 import io
 import json
 import re
 import sys
-from datetime import date, timedelta
+from collections import defaultdict, deque
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+MAX_RESULTS = 200
 
 AIRPORTS_PATH = Path("data/airports.json")
 AIRPORTS_CSV_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"
@@ -23,16 +29,21 @@ CABINS = {
 }
 
 
+_AIRPORTS_MAX_AGE_DAYS = 30
+
+
 @st.cache_data(show_spinner="Downloading airport database…")
 def load_airports() -> dict:
     if AIRPORTS_PATH.exists():
-        data = json.loads(AIRPORTS_PATH.read_text())
-        # Migrate old cache that lacks the "type" field
-        first_airports = next(iter(data.values()), [])
-        if first_airports and "type" not in first_airports[0]:
-            AIRPORTS_PATH.unlink()
-        else:
-            return data
+        raw_cache = json.loads(AIRPORTS_PATH.read_text())
+        if "generated_at" in raw_cache:
+            age = (datetime.now() - datetime.fromisoformat(raw_cache["generated_at"])).days
+            if age <= _AIRPORTS_MAX_AGE_DAYS:
+                cities = raw_cache.get("cities", {})
+                first_airports = next(iter(cities.values()), [])
+                if not first_airports or "type" in first_airports[0]:
+                    return cities
+        AIRPORTS_PATH.unlink()
 
     import csv
     import urllib.request
@@ -59,15 +70,10 @@ def load_airports() -> dict:
     def _sort_key(a):
         return (0 if a["type"] == "large_airport" else 1, a["iata"])
 
-    data = {k: sorted(v, key=_sort_key) for k, v in sorted(cities.items())}
+    cities = {k: sorted(v, key=_sort_key) for k, v in sorted(cities.items())}
     AIRPORTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    AIRPORTS_PATH.write_text(json.dumps(data))
-    return data
-
-
-def _large_airports(airports: list) -> list:
-    large = [a for a in airports if a.get("type") == "large_airport"]
-    return large if large else airports
+    AIRPORTS_PATH.write_text(json.dumps({"generated_at": datetime.now().isoformat(), "cities": cities}))
+    return cities
 
 
 def expand_dates(start: date, end: date, dow_filter: list) -> list:
@@ -109,14 +115,18 @@ def flights_to_df(offers: list) -> tuple:
             is_stop.append(False)
         else:
             n_legs = len(segments)
+            last = n_legs - 1
             for i, seg in enumerate(segments):
                 dur = seg.duration_minutes
+                # Only dep[0] and arr[last] come from Google; all intermediate times are estimated
+                dep_str = seg.departure.strftime("%H:%M") + ("" if i == 0 else " (est.)")
+                arr_str = seg.arrival.strftime("%H:%M") + ("" if i == last else " (est.)")
                 rows.append({
                     "Airline": seg.airline_name or seg.airline,
                     "Route": f"{seg.origin} → {seg.destination}",
                     "Date": seg.departure.strftime("%Y-%m-%d") if i == 0 else "↳",
-                    "Dep": seg.departure.strftime("%H:%M"),
-                    "Arr": seg.arrival.strftime("%H:%M"),
+                    "Dep": dep_str,
+                    "Arr": arr_str,
                     "Duration": f"{dur // 60}h {dur % 60:02d}m",
                     "Stops": f"{n_legs - 1} stop{'s' if n_legs > 2 else ''}" if i == 0 else f"↳ leg {i + 1}/{n_legs}",
                     "Price/pax": round(o.price_per_person) if i == 0 else None,
@@ -131,18 +141,15 @@ def flights_to_df(offers: list) -> tuple:
 
 
 def _apply_stop_style(df: pd.DataFrame, is_stop: list):
-    if not any(is_stop):
+    stop_indices = {i for i, v in enumerate(is_stop) if v}
+    if not stop_indices:
         return df
     def _row_bg(row):
-        return ["background-color: #fffbe6" if is_stop[row.name] else "" for _ in row]
+        return ["background-color: #fffbe6" if row.name in stop_indices else "" for _ in row]
     return df.style.apply(_row_bg, axis=1)
 
 
 def make_flight_chart(outbound_offers: list, inbound_offers: list):
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    from collections import defaultdict
-
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
 
@@ -214,19 +221,31 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                     lane_idx[id(o)] = len(lane_ends)
                     lane_ends.append(dep_h + BAR_H)
 
-        # Local concurrency: width shrinks only for flights that actually overlap
+        # Local concurrency: width shrinks only for flights that actually overlap.
+        # Sweep-line O(n log n): for each flight i, local_n = max simultaneous flights
+        # in any BAR_H window that contains dep[i]. Equivalent to max clique in the
+        # overlap graph, computed via sliding-window max over per-position counts.
         local_n: dict = {}
         for d, day_offers in by_date.items():
-            offer_list = list(day_offers)
-            for o in offer_list:
-                dep_h = _hour(o.outbound.departure)
-                end_h = dep_h + BAR_H
-                max_lane = lane_idx[id(o)]
-                for o2 in offer_list:
-                    dep2 = _hour(o2.outbound.departure)
-                    if dep_h < dep2 + BAR_H and dep2 < end_h:
-                        max_lane = max(max_lane, lane_idx[id(o2)])
-                local_n[id(o)] = max_lane + 1
+            sorted_day = sorted(day_offers, key=lambda o: _hour(o.outbound.departure))
+            deps = [_hour(o.outbound.departure) for o in sorted_day]
+            n_day = len(sorted_day)
+            # cnt[j] = number of flights starting in [deps[j], deps[j]+BAR_H)
+            cnt = [bisect.bisect_left(deps, deps[j] + BAR_H) - j for j in range(n_day)]
+            # Sliding window max of cnt over [lo_i, i]: lo_i = first j with deps[j] > deps[i]-BAR_H
+            dq: deque = deque()
+            for i in range(n_day):
+                new_lo = bisect.bisect_right(deps, deps[i] - BAR_H)
+                while dq and dq[0] < new_lo:
+                    dq.popleft()
+                while dq and cnt[dq[-1]] <= cnt[i]:
+                    dq.pop()
+                dq.append(i)
+                local_n[id(sorted_day[i])] = cnt[dq[0]]
+
+        # Pre-compute color for each unique price (avoids repeated float arithmetic)
+        unique_prices = {o.price_per_person for o in offers}
+        price_to_color = {p: _price_color(p, min_p, max_p) for p in unique_prices}
 
         # Build per-bar arrays
         xs, ys, bases, widths, colors, hovers = [], [], [], [], [], []
@@ -242,7 +261,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             bases.append(dep_h)
             ys.append(BAR_H)
             widths.append(bar_w * 0.92)
-            colors.append(_price_color(o.price_per_person, min_p, max_p))
+            colors.append(price_to_color[o.price_per_person])
             stops_label = f"{o.outbound.stops} stop{'s' if o.outbound.stops != 1 else ''}" if o.outbound.stops else "Direct"
             hovers.append(
                 f"<b>{o.outbound.airline_name}</b> · {stops_label}<br>"
@@ -429,6 +448,24 @@ def main():
         n_in = len(inbound_dates)
         total_steps = len(combos) * (2 if round_trip else 1)
 
+        # Fields shared by both outbound and return configs
+        common_cfg = dict(
+            inbound_dates=[],
+            inbound_departure_window=TimeWindow(earliest="", latest=""),
+            adults=adults,
+            children=children,
+            infants=infants,
+            cabin_class=CABINS[cabin_label],
+            include_airlines=[],
+            exclude_airlines=[],
+            max_stops=stops_val,
+            max_price_per_person=max_price_val,
+            currency=currency,
+            providers=["google_flights"],
+            max_results=MAX_RESULTS,
+            sort_by="price",
+        )
+
         with st.status(f"Searching {len(combos)} route(s)…", expanded=True) as status:
             step = 0
             for orig, dest in combos:
@@ -439,24 +476,11 @@ def main():
                         origin=AirportConfig(city=origin_city, iata=orig),
                         destination=AirportConfig(city=dest_city, iata=dest),
                         outbound_dates=outbound_dates,
-                        inbound_dates=[],
                         outbound_departure_window=TimeWindow(
                             earliest=_window_str(out_window[0], False),
                             latest=_window_str(out_window[1], True),
                         ),
-                        inbound_departure_window=TimeWindow(earliest="", latest=""),
-                        adults=adults,
-                        children=children,
-                        infants=infants,
-                        cabin_class=CABINS[cabin_label],
-                        include_airlines=[],
-                        exclude_airlines=[],
-                        max_stops=stops_val,
-                        max_price_per_person=max_price_val,
-                        currency=currency,
-                        providers=["google_flights"],
-                        max_results=200,
-                        sort_by="price",
+                        **common_cfg,
                     )
                     offers = run_search(cfg)
                     all_outbound.extend(offers)
@@ -472,24 +496,11 @@ def main():
                             origin=AirportConfig(city=dest_city, iata=dest),
                             destination=AirportConfig(city=origin_city, iata=orig),
                             outbound_dates=inbound_dates,
-                            inbound_dates=[],
                             outbound_departure_window=TimeWindow(
                                 earliest=_window_str(in_window[0], False),
                                 latest=_window_str(in_window[1], True),
                             ),
-                            inbound_departure_window=TimeWindow(earliest="", latest=""),
-                            adults=adults,
-                            children=children,
-                            infants=infants,
-                            cabin_class=CABINS[cabin_label],
-                            include_airlines=[],
-                            exclude_airlines=[],
-                            max_stops=stops_val,
-                            max_price_per_person=max_price_val,
-                            currency=currency,
-                            providers=["google_flights"],
-                            max_results=200,
-                            sort_by="price",
+                            **common_cfg,
                         )
                         ret_offers = run_search(cfg_ret)
                         all_inbound.extend(ret_offers)

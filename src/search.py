@@ -1,9 +1,12 @@
+import io
+import sys
+
 from rich.console import Console
 
 from .config import SearchConfig
 from .filters import apply_filters
 
-console = Console()
+console = Console(file=io.StringIO()) if "streamlit" in sys.modules else Console()
 
 _PROVIDER_MODULES = {
     "google_flights": "src.providers.google_flights",
