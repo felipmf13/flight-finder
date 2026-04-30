@@ -10,7 +10,6 @@ console = Console(file=io.StringIO()) if "streamlit" in sys.modules else Console
 
 _PROVIDER_MODULES = {
     "google_flights": "src.providers.google_flights",
-    "scraper": "src.providers.scraper",
 }
 
 _SCHEDULE_ONLY: set = set()

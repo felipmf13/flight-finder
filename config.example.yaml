@@ -107,12 +107,6 @@ currency: "EUR"
 
 # Price providers are tried in order; the first one that succeeds is used.
 #
-# Options:
-#   google_flights — Google Flights internal protobuf API [PRIMARY]
-#                    No API key required. Uses TLS fingerprinting + GDPR consent cookie.
-#                    Round trips are searched as two one-way legs and combined.
-#   scraper        — Playwright headless browser (no credentials required)
-#                    Fragile, likely violates ToS, needs rotating proxies. Last resort only.
 providers:
   - google_flights
 
