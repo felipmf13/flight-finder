@@ -466,49 +466,63 @@ def main():
             sort_by="price",
         )
 
-        with st.status(f"Searching {len(combos)} route(s)…", expanded=True) as status:
-            step = 0
-            for orig, dest in combos:
+        progress_box = st.empty()
+        search_errors: list = []
+
+        def _show_progress(step: int, direction: str, route: str, n_dates: int) -> None:
+            with progress_box.container():
+                col_l, col_r = st.columns([6, 1])
+                col_l.markdown(f"**{direction}** &nbsp; {route}")
+                col_r.markdown(
+                    f"<div style='text-align:right;color:#888;font-size:0.85em'>"
+                    f"{step}&thinsp;/&thinsp;{total_steps}</div>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(step / total_steps)
+                st.caption(f"{n_dates} date{'s' if n_dates != 1 else ''} · fetching…")
+
+        step = 0
+        for orig, dest in combos:
+            step += 1
+            _show_progress(step, "Outbound", f"{orig} → {dest}", n_out)
+            try:
+                cfg = SearchConfig(
+                    origin=AirportConfig(city=origin_city, iata=orig),
+                    destination=AirportConfig(city=dest_city, iata=dest),
+                    outbound_dates=outbound_dates,
+                    outbound_departure_window=TimeWindow(
+                        earliest=_window_str(out_window[0], False),
+                        latest=_window_str(out_window[1], True),
+                    ),
+                    **common_cfg,
+                )
+                offers = run_search(cfg)
+                all_outbound.extend(offers)
+            except Exception as e:
+                search_errors.append(str(e))
+
+            if round_trip:
                 step += 1
-                st.write(f"({step}/{total_steps}) Outbound {orig} → {dest} — {n_out} date(s)")
+                _show_progress(step, "Return", f"{dest} → {orig}", n_in)
                 try:
-                    cfg = SearchConfig(
-                        origin=AirportConfig(city=origin_city, iata=orig),
-                        destination=AirportConfig(city=dest_city, iata=dest),
-                        outbound_dates=outbound_dates,
+                    cfg_ret = SearchConfig(
+                        origin=AirportConfig(city=dest_city, iata=dest),
+                        destination=AirportConfig(city=origin_city, iata=orig),
+                        outbound_dates=inbound_dates,
                         outbound_departure_window=TimeWindow(
-                            earliest=_window_str(out_window[0], False),
-                            latest=_window_str(out_window[1], True),
+                            earliest=_window_str(in_window[0], False),
+                            latest=_window_str(in_window[1], True),
                         ),
                         **common_cfg,
                     )
-                    offers = run_search(cfg)
-                    all_outbound.extend(offers)
-                    st.write(f"  ✓ {len(offers)} flight(s)")
+                    ret_offers = run_search(cfg_ret)
+                    all_inbound.extend(ret_offers)
                 except Exception as e:
-                    st.write(f"  ✗ {e}")
+                    search_errors.append(str(e))
 
-                if round_trip:
-                    step += 1
-                    st.write(f"({step}/{total_steps}) Return {dest} → {orig} — {n_in} date(s)")
-                    try:
-                        cfg_ret = SearchConfig(
-                            origin=AirportConfig(city=dest_city, iata=dest),
-                            destination=AirportConfig(city=origin_city, iata=orig),
-                            outbound_dates=inbound_dates,
-                            outbound_departure_window=TimeWindow(
-                                earliest=_window_str(in_window[0], False),
-                                latest=_window_str(in_window[1], True),
-                            ),
-                            **common_cfg,
-                        )
-                        ret_offers = run_search(cfg_ret)
-                        all_inbound.extend(ret_offers)
-                        st.write(f"  ✓ {len(ret_offers)} flight(s)")
-                    except Exception as e:
-                        st.write(f"  ✗ {e}")
-
-            status.update(label="Search complete", state="complete")
+        progress_box.empty()
+        for err in search_errors:
+            st.warning(err)
 
         st.session_state.outbound_offers = all_outbound
         st.session_state.inbound_offers = all_inbound
