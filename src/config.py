@@ -37,6 +37,7 @@ class SearchConfig:
     providers: list
     max_results: int
     sort_by: str
+    request_delay_seconds: float = 1.0
 
 
 def _expand_dates(raw) -> list:
@@ -100,6 +101,7 @@ def load_config(path: str = "config.yaml") -> SearchConfig:
         providers=list(raw.get("providers") or ["skyscanner"]),
         max_results=int(raw.get("max_results") or 20),
         sort_by=str(raw.get("sort_by") or "price"),
+        request_delay_seconds=float(raw.get("request_delay_seconds") or 1.0),
     )
 
     _validate(cfg)

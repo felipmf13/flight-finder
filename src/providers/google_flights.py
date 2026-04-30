@@ -46,6 +46,10 @@ def search(cfg: SearchConfig) -> list:
         infants_on_lap=cfg.infants,
     )
 
+    # Single client reused across all requests (avoids repeated TLS handshakes)
+    client = primp.Client(impersonate="chrome_126")
+    delay = cfg.request_delay_seconds
+
     def _fetch(from_iata: str, to_iata: str, d: date) -> str:
         tfs = TFSData.from_interface(
             flight_data=[FlightData(date=d.strftime("%Y-%m-%d"), from_airport=from_iata, to_airport=to_iata)],
@@ -55,7 +59,6 @@ def search(cfg: SearchConfig) -> list:
             max_stops=cfg.max_stops,
         )
         params = {"tfs": tfs.as_b64().decode(), "hl": "en", "tfu": "EgQIABABIgA", "curr": cfg.currency}
-        client = primp.Client(impersonate="chrome_126", verify=False)
         resp = client.get("https://www.google.com/travel/flights", params=params, cookies={"SOCS": "CAI"})
         return resp.text
 
@@ -84,7 +87,7 @@ def search(cfg: SearchConfig) -> list:
                     inbound_best[in_date] = (best, itin)
         except Exception as e:
             inbound_fetch_errors.append(str(e))
-        time.sleep(1)
+        time.sleep(delay)
 
     all_offers: list = []
     seen: set = set()
@@ -94,7 +97,7 @@ def search(cfg: SearchConfig) -> list:
             html = _fetch(cfg.origin.iata, cfg.destination.iata, out_date)
         except Exception as e:
             raise RuntimeError(f"Google Flights search failed ({out_date}): {e}")
-        time.sleep(1)
+        time.sleep(delay)
 
         for fd in _parse_html(html):
             out_price = _parse_price(fd["price"])
@@ -104,15 +107,16 @@ def search(cfg: SearchConfig) -> list:
             if not out_itin:
                 continue
 
+            full_name = (fd.get("name") or "").strip()
             if not cfg.inbound_dates or not inbound_best:
-                _add(_make_offer(out_itin, None, out_price, 0.0, cfg), seen, all_offers)
+                _add(_make_offer(out_itin, None, out_price, 0.0, cfg, raw={"airline_full_name": full_name}), seen, all_offers)
             else:
                 for in_date in cfg.inbound_dates:
                     if in_date not in inbound_best:
                         continue
                     in_fd, in_itin = inbound_best[in_date]
                     in_price = _parse_price(in_fd["price"])
-                    _add(_make_offer(out_itin, in_itin, out_price, in_price, cfg), seen, all_offers)
+                    _add(_make_offer(out_itin, in_itin, out_price, in_price, cfg, raw={"airline_full_name": full_name}), seen, all_offers)
 
     if inbound_fetch_errors and not inbound_best:
         raise RuntimeError(
@@ -178,13 +182,13 @@ def _parse_html(html: str) -> list:
 def _add(offer, seen: set, all_offers: list) -> None:
     if offer is None:
         return
-    key = (offer.outbound.departure, offer.price)
+    key = (offer.outbound.departure, offer.outbound.airline, offer.price)
     if key not in seen:
         seen.add(key)
         all_offers.append(offer)
 
 
-def _make_offer(out_itin: Itinerary, in_itin: Optional[Itinerary], out_price: float, in_price: float, cfg: SearchConfig) -> FlightOffer:
+def _make_offer(out_itin: Itinerary, in_itin: Optional[Itinerary], out_price: float, in_price: float, cfg: SearchConfig, raw: Optional[dict] = None) -> FlightOffer:
     return FlightOffer(
         id=str(uuid.uuid4()),
         provider="google_flights",
@@ -197,7 +201,7 @@ def _make_offer(out_itin: Itinerary, in_itin: Optional[Itinerary], out_price: fl
         cabin_class=cfg.cabin_class or "economy",
         adults=cfg.adults,
         price_available=True,
-        raw={},
+        raw=raw or {},
     )
 
 
@@ -290,10 +294,15 @@ _AIRLINE_CODES = {
     "tui": "BY", "jet2": "LS",
 }
 
+# Pre-compiled regex: longest names first to avoid prefix collisions (O(1) per lookup vs O(n) scan)
+_AIRLINE_REGEX = re.compile(
+    "|".join(re.escape(k) for k in sorted(_AIRLINE_CODES, key=len, reverse=True)),
+    re.I,
+)
+
 
 def _airline_code(name: str) -> str:
-    key = name.lower()
-    for partial, code in _AIRLINE_CODES.items():
-        if partial in key:
-            return code
-    return (name[:2].upper() if len(name) >= 2 else "??")
+    m = _AIRLINE_REGEX.search(name)
+    if m:
+        return _AIRLINE_CODES[m.group(0).lower()]
+    return name[:2].upper() if len(name) >= 2 else "??"

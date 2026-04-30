@@ -12,9 +12,7 @@ def _parse_time(t: str) -> Optional[time]:
     return time(int(h), int(m))
 
 
-def _in_window(dt_time: time, window: TimeWindow) -> bool:
-    earliest = _parse_time(window.earliest)
-    latest = _parse_time(window.latest)
+def _in_window(dt_time: time, earliest: Optional[time], latest: Optional[time]) -> bool:
     if earliest and dt_time < earliest:
         return False
     if latest and dt_time > latest:
@@ -23,16 +21,21 @@ def _in_window(dt_time: time, window: TimeWindow) -> bool:
 
 
 def apply_filters(offers: list, cfg: SearchConfig) -> list:
+    out_earliest = _parse_time(cfg.outbound_departure_window.earliest)
+    out_latest = _parse_time(cfg.outbound_departure_window.latest)
+    in_earliest = _parse_time(cfg.inbound_departure_window.earliest)
+    in_latest = _parse_time(cfg.inbound_departure_window.latest)
+
     results = []
     for offer in offers:
         # Outbound departure time window
-        if cfg.outbound_departure_window.earliest or cfg.outbound_departure_window.latest:
-            if not _in_window(offer.outbound.departure.time(), cfg.outbound_departure_window):
+        if out_earliest or out_latest:
+            if not _in_window(offer.outbound.departure.time(), out_earliest, out_latest):
                 continue
 
         # Inbound departure time window
-        if offer.inbound and (cfg.inbound_departure_window.earliest or cfg.inbound_departure_window.latest):
-            if not _in_window(offer.inbound.departure.time(), cfg.inbound_departure_window):
+        if offer.inbound and (in_earliest or in_latest):
+            if not _in_window(offer.inbound.departure.time(), in_earliest, in_latest):
                 continue
 
         # Max stops
