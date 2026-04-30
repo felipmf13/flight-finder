@@ -184,8 +184,7 @@ def print_results(offers: list, cfg: SearchConfig) -> None:
         )
     else:
         console.print(
-            "  [dim]Schedule data only — no prices available. "
-            "Add skyscanner to your providers list to see prices.[/dim]"
+            "  [dim]Schedule data only — no prices available.[/dim]"
         )
     console.print()
 

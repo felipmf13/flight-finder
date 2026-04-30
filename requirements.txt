@@ -1,12 +1,4 @@
-# Python 3.10+ required (the vendored skyscanner library uses union type syntax).
-# Tested on Python 3.14.
-
-# --- Skyscanner provider dependencies (vendored at skyscanner/) ---
-# The skyscanner package itself is vendored directly in this repo.
-# Its PyPI dependencies:
-curl_cffi>=0.6.0
-typeguard>=4.0.0
-orjson>=3.9.0
+# Python 3.10+ required. Tested on Python 3.14.
 
 # --- Google Flights provider dependencies (installed transitively via fast-flights) ---
 fast-flights>=2.2.0   # primp, selectolax, protobuf pulled in automatically
@@ -20,7 +12,3 @@ pandas>=2.2.0
 # --- Web UI ---
 streamlit>=1.26.0
 plotly>=5.0.0
-
-# --- Playwright scraper (last resort, install chromium separately) ---
-# playwright>=1.44.0
-# After installing: playwright install chromium
