@@ -17,6 +17,7 @@ Round-trip handling:
 Dependencies (installed via fast-flights in requirements.txt):
   primp, selectolax, protobuf
 """
+import os
 import re
 import time
 import uuid
@@ -24,7 +25,11 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from ..config import SearchConfig
+from ..filters import _in_window, _parse_time
 from ..models import FlightOffer, Itinerary, Segment
+
+_LAYOVER_ESTIMATE_MIN = 45   # fabricated layover used when stop times are unknown
+_INBOUND_TOP_N = 5           # max inbound options stored per return date
 
 
 def search(cfg: SearchConfig) -> list:
@@ -47,7 +52,7 @@ def search(cfg: SearchConfig) -> list:
     )
 
     # Single client reused across all requests (avoids repeated TLS handshakes)
-    client = primp.Client(impersonate="chrome_126")
+    client = primp.Client(impersonate=os.getenv("PRIMP_IMPERSONATE", "chrome_126"))
     delay = cfg.request_delay_seconds
 
     def _fetch(from_iata: str, to_iata: str, d: date) -> str:
@@ -62,11 +67,13 @@ def search(cfg: SearchConfig) -> list:
         resp = client.get("https://www.google.com/travel/flights", params=params, cookies={"SOCS": "CAI"})
         return resp.text
 
-    # Pre-fetch cheapest inbound per return date (round-trip only)
-    inbound_best: dict = {}
+    # Pre-fetch top inbound options per return date (round-trip only)
+    inbound_best: dict = {}   # date -> list of (fd, itin), sorted cheapest-first
     inbound_fetch_errors: list = []
     in_window = cfg.inbound_departure_window
-    use_in_window = bool(in_window.earliest or in_window.latest)
+    in_earliest = _parse_time(in_window.earliest)
+    in_latest = _parse_time(in_window.latest)
+    use_in_window = bool(in_earliest or in_latest)
     for in_date in (cfg.inbound_dates or []):
         try:
             html = _fetch(cfg.destination.iata, cfg.origin.iata, in_date)
@@ -77,14 +84,17 @@ def search(cfg: SearchConfig) -> list:
                     continue
                 if use_in_window:
                     itin = _build_itinerary(f, in_date, cfg.destination.iata, cfg.origin.iata)
-                    if not itin or not _dep_in_window(itin.departure, in_window):
+                    if not itin or not _in_window(itin.departure.time(), in_earliest, in_latest):
                         continue
                 valid.append(f)
-            if valid:
-                best = min(valid, key=lambda f: _parse_price(f["price"]))
-                itin = _build_itinerary(best, in_date, cfg.destination.iata, cfg.origin.iata)
+            top = sorted(valid, key=lambda f: _parse_price(f["price"]))[:_INBOUND_TOP_N]
+            pairs = []
+            for f in top:
+                itin = _build_itinerary(f, in_date, cfg.destination.iata, cfg.origin.iata)
                 if itin:
-                    inbound_best[in_date] = (best, itin)
+                    pairs.append((f, itin))
+            if pairs:
+                inbound_best[in_date] = pairs
         except Exception as e:
             inbound_fetch_errors.append(str(e))
         time.sleep(delay)
@@ -108,15 +118,16 @@ def search(cfg: SearchConfig) -> list:
                 continue
 
             full_name = (fd.get("name") or "").strip()
+            raw = {"airline_full_name": full_name}
             if not cfg.inbound_dates or not inbound_best:
-                _add(_make_offer(out_itin, None, out_price, 0.0, cfg, raw={"airline_full_name": full_name}), seen, all_offers)
+                _add(_make_offer(out_itin, None, out_price, 0.0, cfg, raw=raw), seen, all_offers)
             else:
                 for in_date in cfg.inbound_dates:
                     if in_date not in inbound_best:
                         continue
-                    in_fd, in_itin = inbound_best[in_date]
-                    in_price = _parse_price(in_fd["price"])
-                    _add(_make_offer(out_itin, in_itin, out_price, in_price, cfg, raw={"airline_full_name": full_name}), seen, all_offers)
+                    for in_fd, in_itin in inbound_best[in_date]:
+                        in_price = _parse_price(in_fd["price"])
+                        _add(_make_offer(out_itin, in_itin, out_price, in_price, cfg, raw=raw), seen, all_offers)
 
     if inbound_fetch_errors and not inbound_best:
         raise RuntimeError(
@@ -209,6 +220,9 @@ def _build_itinerary(fd: dict, flight_date: date, origin_iata: str, dest_iata: s
     try:
         dep_dt = _parse_aria_dt(fd["departure"], fd.get("dep_date", ""), flight_date.year)
         arr_dt = _parse_aria_dt(fd["arrival"], fd.get("arr_date", ""), flight_date.year)
+        # Fix year rollover: a flight departing 31 Dec arriving 1 Jan gets arr_dt in wrong year
+        if arr_dt < dep_dt:
+            arr_dt = arr_dt.replace(year=arr_dt.year + 1)
         duration = _parse_duration(fd["duration"])
         stops = fd["stops"]
         airline_name = (fd["name"] or "Unknown").split("·")[0].strip() or "Unknown"
@@ -255,13 +269,8 @@ def _build_segments(stops: int, origin: str, dest: str, dep_dt: datetime, arr_dt
             flight_number=f"{code}????",
             duration_minutes=leg_min,
         ))
-        cur = seg_arr + timedelta(minutes=45)
+        cur = seg_arr + timedelta(minutes=_LAYOVER_ESTIMATE_MIN)
     return segments
-
-
-def _dep_in_window(dt: "datetime", window) -> bool:
-    from ..filters import _in_window
-    return _in_window(dt.time(), window)
 
 
 def _parse_duration(s: str) -> int:

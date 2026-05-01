@@ -47,6 +47,11 @@ def _expand_dates(raw) -> list:
         return [date.fromisoformat(str(d)) for d in raw]
     if isinstance(raw, dict):
         r = raw.get("range", raw)
+        if "from" not in r or "to" not in r:
+            raise ValueError(
+                "Date range must have 'from' and 'to' keys. "
+                f"Got: {list(r.keys())}"
+            )
         start = date.fromisoformat(str(r["from"]))
         end = date.fromisoformat(str(r["to"]))
         result, current = [], start
@@ -100,7 +105,7 @@ def load_config(path: str = "config.yaml") -> SearchConfig:
         currency=str(raw.get("currency") or "EUR").upper(),
         providers=list(raw.get("providers") or ["google_flights"]),
         max_results=int(raw.get("max_results") or 20),
-        sort_by=str(raw.get("sort_by") or "price"),
+        sort_by=str(raw.get("sort_by") or "price").lower(),
         request_delay_seconds=float(raw.get("request_delay_seconds") or 1.0),
     )
 
@@ -117,5 +122,10 @@ def _validate(cfg: SearchConfig) -> None:
         raise ValueError("origin.iata or origin.city is required.")
     if not cfg.destination.iata and not cfg.destination.city:
         raise ValueError("destination.iata or destination.city is required.")
+    for label, iata in (("origin", cfg.origin.iata), ("destination", cfg.destination.iata)):
+        if iata and len(iata) != 3:
+            raise ValueError(f"{label}.iata must be exactly 3 characters, got '{iata}'.")
     if cfg.sort_by not in ("price", "duration", "departure_time"):
         raise ValueError(f"Invalid sort_by: '{cfg.sort_by}'. Use price, duration, or departure_time.")
+    if cfg.request_delay_seconds < 0:
+        raise ValueError(f"request_delay_seconds must be >= 0, got {cfg.request_delay_seconds}.")
