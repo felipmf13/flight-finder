@@ -8,7 +8,10 @@ from .config import SearchConfig, TimeWindow
 def _parse_time(t: str) -> Optional[time]:
     if not t:
         return None
-    h, m = t.strip().split(":")
+    parts = t.strip().split(":")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid time format '{t}': expected HH:MM.")
+    h, m = parts
     return time(int(h), int(m))
 
 
@@ -20,7 +23,23 @@ def _in_window(dt_time: time, earliest: Optional[time], latest: Optional[time]) 
     return True
 
 
+def _any_filter_active(cfg: SearchConfig) -> bool:
+    return bool(
+        cfg.outbound_departure_window.earliest
+        or cfg.outbound_departure_window.latest
+        or cfg.inbound_departure_window.earliest
+        or cfg.inbound_departure_window.latest
+        or cfg.max_stops is not None
+        or cfg.include_airlines
+        or cfg.exclude_airlines
+        or cfg.max_price_per_person is not None
+    )
+
+
 def apply_filters(offers: list, cfg: SearchConfig) -> list:
+    if not _any_filter_active(cfg):
+        return list(offers)
+
     out_earliest = _parse_time(cfg.outbound_departure_window.earliest)
     out_latest = _parse_time(cfg.outbound_departure_window.latest)
     in_earliest = _parse_time(cfg.inbound_departure_window.earliest)
@@ -59,7 +78,7 @@ def apply_filters(offers: list, cfg: SearchConfig) -> list:
             if (out_airlines | in_airlines) & set(cfg.exclude_airlines):
                 continue
 
-        # Price cap per person — skip this filter for schedule-only offers (no price data)
+        # Price cap per person — skip for schedule-only offers (no price data)
         if cfg.max_price_per_person is not None and offer.price_available:
             if offer.price_per_person > cfg.max_price_per_person:
                 continue

@@ -12,8 +12,6 @@ _PROVIDER_MODULES = {
     "google_flights": "src.providers.google_flights",
 }
 
-_SCHEDULE_ONLY: set = set()
-
 
 def _load(name: str):
     import importlib
@@ -24,46 +22,22 @@ def _load(name: str):
 
 
 def run_search(cfg: SearchConfig) -> list:
-    price_providers = [p for p in cfg.providers if p not in _SCHEDULE_ONLY]
-    schedule_providers = [p for p in cfg.providers if p in _SCHEDULE_ONLY]
-
-    price_offers: list = []
-    schedule_offers: list = []
+    all_offers: list = []
     tried: list = []
 
-    # Price providers: try in order, stop at first success
-    for provider_name in price_providers:
+    for provider_name in cfg.providers:
         console.print(f"\n[cyan]Searching via [bold]{provider_name}[/bold]...[/cyan]")
         tried.append(provider_name)
         try:
             provider = _load(provider_name)
             offers = provider.search(cfg)
             console.print(f"  [green]✓[/green] {len(offers)} offer{'s' if len(offers) != 1 else ''} returned")
-            price_offers = offers
+            all_offers = offers
             break
         except (RuntimeError, ValueError) as e:
             console.print(f"  [yellow]⚠  {e}[/yellow]")
         except Exception as e:
             console.print(f"  [red]✗  {provider_name} failed unexpectedly: {e}[/red]")
-
-    # Schedule providers: always run, supplement price results
-    for provider_name in schedule_providers:
-        console.print(f"\n[cyan]Fetching schedules via [bold]{provider_name}[/bold]...[/cyan]")
-        tried.append(provider_name)
-        try:
-            provider = _load(provider_name)
-            offers = provider.search(cfg)
-            console.print(
-                f"  [green]✓[/green] {len(offers)} schedule{'s' if len(offers) != 1 else ''} "
-                f"returned [dim](no prices)[/dim]"
-            )
-            schedule_offers.extend(offers)
-        except (RuntimeError, ValueError) as e:
-            console.print(f"  [yellow]⚠  {e}[/yellow]")
-        except Exception as e:
-            console.print(f"  [red]✗  {provider_name} failed unexpectedly: {e}[/red]")
-
-    all_offers = price_offers + schedule_offers
 
     if not all_offers:
         console.print(

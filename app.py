@@ -29,20 +29,34 @@ CABINS = {
 }
 
 
+def _window_str(h: int, is_upper: bool) -> str:
+    """Convert slider hour value to HH:MM string; returns '' for boundary defaults."""
+    if (is_upper and h == 24) or (not is_upper and h == 0):
+        return ""
+    return f"{h:02d}:00"
+
+
 _AIRPORTS_MAX_AGE_DAYS = 30
 
 
-@st.cache_data(show_spinner="Downloading airport database…")
+def _airport_sort_key(a: dict) -> tuple:
+    return (0 if a["type"] == "large_airport" else 1, a["iata"])
+
+
+@st.cache_data(ttl=timedelta(days=_AIRPORTS_MAX_AGE_DAYS), show_spinner="Downloading airport database…")
 def load_airports() -> dict:
     if AIRPORTS_PATH.exists():
         raw_cache = json.loads(AIRPORTS_PATH.read_text())
-        if "generated_at" in raw_cache:
-            age = (datetime.now() - datetime.fromisoformat(raw_cache["generated_at"])).days
-            if age <= _AIRPORTS_MAX_AGE_DAYS:
-                cities = raw_cache.get("cities", {})
-                first_airports = next(iter(cities.values()), [])
-                if not first_airports or "type" in first_airports[0]:
-                    return cities
+
+        # New format: has a 'cities' wrapper with 'generated_at'
+        if "cities" in raw_cache:
+            cities = raw_cache["cities"]
+            first_airports = next(iter(cities.values()), [])
+            # Return if schema is current (has 'type' field); otherwise re-download
+            if not first_airports or "type" in first_airports[0]:
+                return cities
+
+        # Old format or stale schema — delete and re-download
         AIRPORTS_PATH.unlink()
 
     import csv
@@ -67,10 +81,7 @@ def load_airports() -> dict:
         key = f"{municipality}, {country}"
         cities.setdefault(key, []).append({"iata": iata, "name": name, "type": airport_type})
 
-    def _sort_key(a):
-        return (0 if a["type"] == "large_airport" else 1, a["iata"])
-
-    cities = {k: sorted(v, key=_sort_key) for k, v in sorted(cities.items())}
+    cities = {k: sorted(v, key=_airport_sort_key) for k, v in sorted(cities.items())}
     AIRPORTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     AIRPORTS_PATH.write_text(json.dumps({"generated_at": datetime.now().isoformat(), "cities": cities}))
     return cities
@@ -434,11 +445,6 @@ def main():
 
         from src.config import AirportConfig, SearchConfig, TimeWindow
         from src.search import run_search
-
-        def _window_str(h: int, is_upper: bool) -> str:
-            if (is_upper and h == 24) or (not is_upper and h == 0):
-                return ""
-            return f"{h:02d}:00"
 
         combos = [(o, d) for o in origin_iatas for d in dest_iatas]
         all_outbound: list = []
