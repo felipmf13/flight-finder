@@ -139,21 +139,6 @@ A fully documented template is available at [`config.example.yaml`](config.examp
 
 ---
 
-## Environment Variables
-
-Create a `.env` file in the project root (never committed):
-
-```
-# Optional: rotating proxy for sustained or automated use
-# Format: http://user:pass@host:port
-PROXY_URL=
-
-# Optional: override the Chrome version primp impersonates
-PRIMP_IMPERSONATE=chrome_126
-```
-
----
-
 ## Project Structure
 
 ```

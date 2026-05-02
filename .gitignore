@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Personal search config (use config.example.yaml as template)
+config.yaml
+
 # Python
 __pycache__/
 *.py[cod]
