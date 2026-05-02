@@ -161,13 +161,12 @@ def flights_to_df(offers: list) -> tuple:
     return df, is_stop
 
 
-def _apply_stop_style(df: pd.DataFrame, is_stop: list, dark: bool = False):
+def _apply_stop_style(df: pd.DataFrame, is_stop: list):
     stop_indices = {i for i, v in enumerate(is_stop) if v}
     if not stop_indices:
         return df
-    bg = "#1a2e1a" if dark else "#fffbe6"
     def _row_bg(row):
-        return [f"background-color: {bg}" if row.name in stop_indices else "" for _ in row]
+        return ["background-color: #fffbe6" if row.name in stop_indices else "" for _ in row]
     return df.style.apply(_row_bg, axis=1)
 
 
@@ -296,37 +295,45 @@ hr { border-color: #2a2a2a !important; }
 [data-testid="stAlert"] { background-color: #141f14 !important; }
 [data-testid="stAlert"] p { color: #d1d5db !important; }
 
-/* ── Green accent (replaces Streamlit default blue) ─────── */
-/* Checkbox checked */
+/* ── Green accent ────────────────────────────────────────── */
+/* Streamlit's primary color is #FF4B4B (red, hue ≈ 0°).
+   hue-rotate(130deg) shifts it to ≈ 130° (green) reliably
+   without needing to know emotion-generated class names.
+   Applied only to the visual indicator, not the text label. */
+[data-testid="stToggle"] label > div { filter: hue-rotate(130deg); }
+[data-testid="stCheckbox"] label > div:first-child { filter: hue-rotate(130deg); }
+[data-testid="stRadio"] [data-baseweb="radio"] { filter: hue-rotate(130deg); }
+
+/* Belt-and-suspenders: direct property overrides for base-web */
 [data-baseweb="checkbox"] [aria-checked="true"] > div,
-[data-baseweb="checkbox"] [data-checked="true"] > div {
+[data-baseweb="checkbox"] [data-checked] > div {
     background-color: #22c55e !important;
     border-color: #22c55e !important;
 }
-/* Radio selected dot */
-[data-baseweb="radio"] [aria-checked="true"] div,
-[data-baseweb="radio"] [data-checked="true"] div {
-    background-color: #22c55e !important;
+[data-baseweb="radio"] [aria-checked="true"] {
     border-color: #22c55e !important;
-    box-shadow: none !important;
+    box-shadow: inset 0 0 0 5px #22c55e !important;
 }
-/* Toggle on */
-[data-testid="stToggle"] input:checked ~ div {
-    background-color: #22c55e !important;
-}
+
 /* Focused input / select border */
-[data-baseweb="input"]:focus-within > div {
-    border-color: #22c55e !important;
-}
-[data-baseweb="select"]:focus-within > div:first-child {
-    border-color: #22c55e !important;
-}
+[data-baseweb="input"]:focus-within > div { border-color: #22c55e !important; }
+[data-baseweb="select"]:focus-within > div:first-child { border-color: #22c55e !important; }
+
 /* Multiselect tag */
-[data-baseweb="tag"] {
-    background-color: #14532d !important;
-    border-color: #22c55e !important;
-}
+[data-baseweb="tag"] { background-color: #14532d !important; border-color: #22c55e !important; }
 [data-baseweb="tag"] span { color: #d1d5db !important; }
+
+/* ── Dataframe dark mode ─────────────────────────────────── */
+/* Canvas-rendered grid — CSS can't style cells directly.
+   invert+hue-rotate flips white→black while keeping hues intact. */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrameResizable"] {
+    filter: invert(1) hue-rotate(180deg);
+}
+/* Double-invert images to restore logo colours */
+[data-testid="stDataFrame"] img {
+    filter: invert(1) hue-rotate(180deg);
+}
 </style>
 """
 
@@ -774,11 +781,11 @@ def main():
     _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
 
     _result_heading("Outbound")
-    st.dataframe(_apply_stop_style(out_df, out_stop, dark=dark), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
+    st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     if st.session_state.inbound_offers:
         _result_heading("Return")
-        st.dataframe(_apply_stop_style(in_df, in_stop, dark=dark), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
+        st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     # ── Timeline chart ──────────────────────────────────────────────────────────
     _result_heading("Timeline")
