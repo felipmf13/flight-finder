@@ -508,6 +508,11 @@ def main():
                 st.error("No return dates match the selected days-of-week filter.")
                 return
 
+        progress_box = st.empty()
+        with progress_box.container():
+            st.progress(0.0)
+            st.caption("Preparing…")
+
         from src.config import AirportConfig, SearchConfig, TimeWindow
         from src.search import run_search
 
@@ -553,7 +558,6 @@ def main():
                 })
 
         total_tasks = len(tasks)
-        progress_box = st.empty()
         search_errors: list = []
 
         def _run_task(t: dict) -> tuple:
