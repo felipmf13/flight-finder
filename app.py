@@ -296,23 +296,34 @@ hr { border-color: #2a2a2a !important; }
 [data-testid="stAlert"] p { color: #d1d5db !important; }
 
 /* ── Green accent ────────────────────────────────────────── */
-/* Streamlit's primary color is #FF4B4B (red, hue ≈ 0°).
-   hue-rotate(130deg) shifts it to ≈ 130° (green) reliably
-   without needing to know emotion-generated class names.
-   Applied only to the visual indicator, not the text label. */
-[data-testid="stToggle"] label > div { filter: hue-rotate(130deg); }
-[data-testid="stCheckbox"] label > div:first-child { filter: hue-rotate(130deg); }
-[data-testid="stRadio"] [data-baseweb="radio"] { filter: hue-rotate(130deg); }
+/* Streamlit's primary color is #FF4B4B (hue ≈ 0°, red).
+   hue-rotate(130deg) shifts it to ≈ 130° (green).
+   Grey elements have 0 chroma so the filter leaves them unchanged —
+   only the red/orange accent color is affected. */
 
-/* Belt-and-suspenders: direct property overrides for base-web */
-[data-baseweb="checkbox"] [aria-checked="true"] > div,
-[data-baseweb="checkbox"] [data-checked] > div {
+/* Toggle */
+[data-testid="stToggle"] { filter: hue-rotate(130deg); }
+
+/* Checkbox (whole component; grey label text is unaffected) */
+[data-baseweb="checkbox"] { filter: hue-rotate(130deg); }
+
+/* Radio buttons */
+[data-baseweb="radio"] { filter: hue-rotate(130deg); }
+
+/* Sliders — active track + thumb; grey track has 0 chroma → unchanged */
+[data-baseweb="slider"] { filter: hue-rotate(130deg); }
+
+/* Primary button — solid colour, easiest to override directly */
+[data-testid="stBaseButton-primary"],
+button[kind="primary"] {
     background-color: #22c55e !important;
     border-color: #22c55e !important;
+    color: #fff !important;
 }
-[data-baseweb="radio"] [aria-checked="true"] {
-    border-color: #22c55e !important;
-    box-shadow: inset 0 0 0 5px #22c55e !important;
+[data-testid="stBaseButton-primary"]:hover,
+button[kind="primary"]:hover {
+    background-color: #16a34a !important;
+    border-color: #16a34a !important;
 }
 
 /* Focused input / select border */
@@ -324,15 +335,16 @@ hr { border-color: #2a2a2a !important; }
 [data-baseweb="tag"] span { color: #d1d5db !important; }
 
 /* ── Dataframe dark mode ─────────────────────────────────── */
-/* Canvas-rendered grid — CSS can't style cells directly.
-   invert+hue-rotate flips white→black while keeping hues intact. */
-[data-testid="stDataFrame"],
-[data-testid="stDataFrameResizable"] {
-    filter: invert(1) hue-rotate(180deg);
+/* The grid cells render on <canvas> — CSS cannot style them directly.
+   invert(1) hue-rotate(180deg) flips white → black and black → white
+   while leaving other hues intact. !important ensures it wins over
+   any Streamlit-injected styles. */
+[data-testid="stDataFrame"] {
+    filter: invert(1) hue-rotate(180deg) !important;
 }
-/* Double-invert images to restore logo colours */
+/* Double-invert images inside so logos are restored to original colours */
 [data-testid="stDataFrame"] img {
-    filter: invert(1) hue-rotate(180deg);
+    filter: invert(1) hue-rotate(180deg) !important;
 }
 </style>
 """
