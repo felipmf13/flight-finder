@@ -572,6 +572,10 @@ def main():
     out_df, out_stop = flights_to_df(out_sorted)
     in_df, in_stop = flights_to_df(in_sorted)
 
+    st.markdown(
+        "<style>[data-testid='stDataFrame'] img { max-height: 26px; }</style>",
+        unsafe_allow_html=True,
+    )
     _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
 
     st.subheader("Outbound flights")
