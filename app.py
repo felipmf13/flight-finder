@@ -200,27 +200,165 @@ _CSS = """
 
 /* ── Airline logos ─────────────────────────────────────── */
 [data-testid="stDataFrame"] img { max-height: 10px; }
+
+/* ── Custom element classes ─────────────────────────────── */
+.ff-section {
+    font-size: 0.67rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.09em; color: #9ca3af; margin: 1.5rem 0 0.1rem;
+}
+.ff-heading {
+    font-size: 0.95rem; font-weight: 600; color: #111;
+    letter-spacing: -0.01em; margin: 1.75rem 0 0.4rem;
+}
+.ff-count { font-size: 0.875rem; color: #6b7280; margin: 0.45rem 0 0; }
+.ff-check { color: #16a34a; font-weight: 600; }
+</style>
+"""
+
+_CSS_DARK = """
+<style>
+/* ── Dark mode backgrounds ──────────────────────────────── */
+.stApp,
+[data-testid="stAppViewContainer"],
+section.main,
+.main .block-container {
+    background-color: #0d0d0d !important;
+    color: #d1d5db !important;
+}
+[data-testid="stHeader"] { background-color: #0d0d0d !important; }
+
+/* ── Sidebar ────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #111111 !important;
+    border-right-color: #222222 !important;
+}
+
+/* ── Custom element classes ─────────────────────────────── */
+.ff-section { color: #555f6d !important; }
+.ff-heading { color: #f0f0f0 !important; }
+.ff-count   { color: #9ca3af !important; }
+.ff-check   { color: #22c55e !important; }
+
+/* ── Markdown & widget text ─────────────────────────────── */
+.stMarkdown p, .stMarkdown span, .stMarkdown li { color: #d1d5db !important; }
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span { color: #9ca3af !important; }
+
+/* ── Select ─────────────────────────────────────────────── */
+[data-baseweb="select"] > div:first-child {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+}
+[data-baseweb="select"] span { color: #d1d5db !important; }
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="menu"] ul { background-color: #1a1a1a !important; }
+[data-baseweb="option"] { color: #d1d5db !important; background-color: #1a1a1a !important; }
+li[aria-selected="true"] { background-color: #252525 !important; }
+
+/* ── Text / number input ────────────────────────────────── */
+[data-baseweb="input"] > div {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+}
+[data-baseweb="input"] input {
+    color: #d1d5db !important;
+    background: transparent !important;
+    caret-color: #d1d5db !important;
+}
+
+/* ── Multiselect tags ───────────────────────────────────── */
+[data-baseweb="tag"] { background-color: #252525 !important; }
+[data-baseweb="tag"] span { color: #d1d5db !important; }
+
+/* ── Toggle / checkbox / radio ──────────────────────────── */
+[data-testid="stToggle"] p,
+[data-testid="stCheckbox"] p,
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] p { color: #d1d5db !important; }
+
+/* ── Progress bar ───────────────────────────────────────── */
+[data-testid="stProgressBar"] > div { background-color: #222 !important; }
+[data-testid="stProgressBar"] > div > div { background-color: #22c55e !important; }
+
+/* ── Caption / divider ──────────────────────────────────── */
+[data-testid="stCaptionContainer"] p { color: #6b7280 !important; }
+hr { border-color: #2a2a2a !important; }
+
+/* ── Download button ────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+    color: #d1d5db !important;
+}
+
+/* ── Alert boxes ────────────────────────────────────────── */
+[data-testid="stAlert"] { background-color: #141f14 !important; }
+[data-testid="stAlert"] p { color: #d1d5db !important; }
+
+/* ── Green accent ────────────────────────────────────────── */
+/* Streamlit's primary color is #FF4B4B (hue ≈ 0°, red).
+   hue-rotate(130deg) shifts it to ≈ 130° (green).
+   Grey elements have 0 chroma so the filter leaves them unchanged —
+   only the red/orange accent color is affected. */
+
+/* Toggle */
+[data-testid="stToggle"] { filter: hue-rotate(130deg); }
+
+/* Checkbox (whole component; grey label text is unaffected) */
+[data-baseweb="checkbox"] { filter: hue-rotate(130deg); }
+
+/* Radio buttons */
+[data-baseweb="radio"] { filter: hue-rotate(130deg); }
+
+/* Sliders — active track + thumb; grey track has 0 chroma → unchanged */
+[data-baseweb="slider"] { filter: hue-rotate(130deg); }
+
+/* Primary button — solid colour, easiest to override directly */
+[data-testid="stBaseButton-primary"],
+button[kind="primary"] {
+    background-color: #22c55e !important;
+    border-color: #22c55e !important;
+    color: #fff !important;
+}
+[data-testid="stBaseButton-primary"]:hover,
+button[kind="primary"]:hover {
+    background-color: #16a34a !important;
+    border-color: #16a34a !important;
+}
+
+/* Focused input / select border */
+[data-baseweb="input"]:focus-within > div { border-color: #22c55e !important; }
+[data-baseweb="select"]:focus-within > div:first-child { border-color: #22c55e !important; }
+
+/* Multiselect tag */
+[data-baseweb="tag"] { background-color: #14532d !important; border-color: #22c55e !important; }
+[data-baseweb="tag"] span { color: #d1d5db !important; }
+
+/* ── Dataframe dark mode ─────────────────────────────────── */
+/* The grid cells render on <canvas> — CSS cannot style them directly.
+   invert(1) hue-rotate(180deg) flips white → black and black → white
+   while leaving other hues intact. !important ensures it wins over
+   any Streamlit-injected styles. */
+[data-testid="stDataFrame"] {
+    filter: invert(1) hue-rotate(180deg) !important;
+}
+/* Double-invert images inside so logos are restored to original colours */
+[data-testid="stDataFrame"] img {
+    filter: invert(1) hue-rotate(180deg) !important;
+}
 </style>
 """
 
 
 def _section(label: str) -> None:
-    st.markdown(
-        f"<p style='font-size:0.67rem;font-weight:700;text-transform:uppercase;"
-        f"letter-spacing:0.09em;color:#9ca3af;margin:1.5rem 0 0.1rem'>{label}</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<p class='ff-section'>{label}</p>", unsafe_allow_html=True)
 
 
 def _result_heading(label: str) -> None:
-    st.markdown(
-        f"<h3 style='font-size:0.95rem;font-weight:600;color:#111;"
-        f"letter-spacing:-0.01em;margin:1.75rem 0 0.4rem'>{label}</h3>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<h3 class='ff-heading'>{label}</h3>", unsafe_allow_html=True)
 
 
-def make_flight_chart(outbound_offers: list, inbound_offers: list):
+def make_flight_chart(outbound_offers: list, inbound_offers: list, dark: bool = False):
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
 
@@ -340,10 +478,10 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                 f"{currency} {o.price_per_person:.0f} / pax"
             )
             if o.outbound.stops > 0:
-                border_colors.append("rgba(0,0,0,0.85)")
+                border_colors.append("rgba(255,255,255,0.5)" if dark else "rgba(0,0,0,0.85)")
                 border_widths.append(1.5)
             else:
-                border_colors.append("rgba(0,0,0,0.15)")
+                border_colors.append("rgba(255,255,255,0.1)" if dark else "rgba(0,0,0,0.15)")
                 border_widths.append(0.4)
 
         fig.add_trace(go.Bar(
@@ -375,7 +513,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         fig.update_xaxes(
             tickmode="array", tickvals=tick_vals_x, ticktext=tick_texts_x,
             range=[-0.6, x_max + 0.6],
-            showgrid=False, tickfont=dict(size=11),
+            showgrid=False, tickfont=dict(size=11, color="#9ca3af" if dark else "#444"),
             row=1, col=col,
         )
 
@@ -387,21 +525,28 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
     tick_text_y = [f"{h:02d}:00" for h in tick_vals_y]
     fig.update_yaxes(
         range=[24, 0], tickvals=tick_vals_y, ticktext=tick_text_y,
-        gridcolor="rgba(0,0,0,0.08)", zeroline=False, tickfont=dict(size=10),
+        gridcolor="rgba(255,255,255,0.05)" if dark else "rgba(0,0,0,0.08)",
+        zeroline=False, tickfont=dict(size=10, color="#9ca3af" if dark else "#444"),
     )
     fig.update_layout(
         barmode="overlay",
         height=660, showlegend=False,
-        plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#141414" if dark else "#f8f9fa",
+        paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=50, b=20, l=60, r=90),
-        hoverlabel=dict(bgcolor="white", font_size=13),
+        hoverlabel=dict(bgcolor="#1e1e1e" if dark else "white", font_size=13,
+                        font_color="#d1d5db" if dark else "#111"),
     )
+    if dark:
+        fig.update_annotations(font=dict(color="#9ca3af"))
     return fig
 
 
 def main():
     st.set_page_config(page_title="Flight Finder", page_icon="✈", layout="wide")
     st.markdown(_CSS, unsafe_allow_html=True)
+    if st.session_state.get("dark_mode"):
+        st.markdown(_CSS_DARK, unsafe_allow_html=True)
     st.markdown(
         "<h1 style='font-size:1.6rem;font-weight:700;letter-spacing:-0.03em;"
         "margin:0 0 1.25rem;line-height:1.2'>✈ &nbsp;Flight Finder</h1>",
@@ -420,6 +565,7 @@ def main():
 
     # ── Sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
+        st.toggle("Dark mode", key="dark_mode")
         currency = st.selectbox("Currency", CURRENCIES)
 
         _section("Route")
@@ -625,8 +771,7 @@ def main():
     col_count, col_sort = st.columns([2, 3])
     with col_count:
         st.markdown(
-            f"<p style='font-size:0.875rem;color:#6b7280;margin:0.45rem 0 0'>"
-            f"<span style='color:#16a34a;font-weight:600'>✓</span>"
+            f"<p class='ff-count'><span class='ff-check'>✓</span>"
             f"&nbsp; {st.session_state.search_label}</p>",
             unsafe_allow_html=True,
         )
@@ -644,6 +789,7 @@ def main():
     out_df, out_stop = flights_to_df(out_sorted)
     in_df, in_stop = flights_to_df(in_sorted)
 
+    dark = st.session_state.get("dark_mode", False)
     _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
 
     _result_heading("Outbound")
@@ -658,6 +804,7 @@ def main():
     fig = make_flight_chart(
         st.session_state.outbound_offers,
         st.session_state.inbound_offers,
+        dark=dark,
     )
     if fig:
         st.plotly_chart(fig, use_container_width=True)
