@@ -326,7 +326,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
             dep_h = _hour(o.outbound.departure)
             n = local_n[id(o)]
             lane = lane_idx[id(o)]
-            bar_w = (FULL_W / 2) if n == 1 else (FULL_W / n)
+            bar_w = (FULL_W / 1.8) if n == 1 else (FULL_W / n)
             x_centre = date_to_x[d] + (lane - (n - 1) / 2) * bar_w
             xs.append(x_centre)
             bases.append(dep_h)
