@@ -174,7 +174,6 @@ _CSS = """
 <style>
 /* ── Chrome ────────────────────────────────────────────── */
 #MainMenu, footer { visibility: hidden; }
-[data-testid="stToolbar"] { display: none; }
 
 /* ── Layout ────────────────────────────────────────────── */
 .main .block-container {
