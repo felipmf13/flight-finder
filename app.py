@@ -170,6 +170,57 @@ def _apply_stop_style(df: pd.DataFrame, is_stop: list):
     return df.style.apply(_row_bg, axis=1)
 
 
+_CSS = """
+<style>
+/* ── Chrome ────────────────────────────────────────────── */
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
+
+/* ── Layout ────────────────────────────────────────────── */
+.main .block-container {
+    padding-top: 1.75rem;
+    padding-bottom: 3rem;
+}
+
+/* ── Sidebar ───────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #f7f8fa;
+    border-right: 1px solid #eaecef;
+}
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 1.25rem;
+}
+
+/* ── Search button ─────────────────────────────────────── */
+[data-testid="stSidebar"] .stButton > button {
+    border-radius: 8px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin-top: 0.5rem;
+}
+
+/* ── Airline logos ─────────────────────────────────────── */
+[data-testid="stDataFrame"] img { max-height: 10px; }
+</style>
+"""
+
+
+def _section(label: str) -> None:
+    st.markdown(
+        f"<p style='font-size:0.67rem;font-weight:700;text-transform:uppercase;"
+        f"letter-spacing:0.09em;color:#9ca3af;margin:1.5rem 0 0.1rem'>{label}</p>",
+        unsafe_allow_html=True,
+    )
+
+
+def _result_heading(label: str) -> None:
+    st.markdown(
+        f"<h3 style='font-size:0.95rem;font-weight:600;color:#111;"
+        f"letter-spacing:-0.01em;margin:1.75rem 0 0.4rem'>{label}</h3>",
+        unsafe_allow_html=True,
+    )
+
+
 def make_flight_chart(outbound_offers: list, inbound_offers: list):
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
@@ -351,7 +402,12 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
 
 def main():
     st.set_page_config(page_title="Flight Finder", page_icon="✈", layout="wide")
-    st.title("✈ Flight Finder")
+    st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='font-size:1.6rem;font-weight:700;letter-spacing:-0.03em;"
+        "margin:0 0 1.25rem;line-height:1.2'>✈ &nbsp;Flight Finder</h1>",
+        unsafe_allow_html=True,
+    )
 
     airports_data = load_airports()
     city_list = [""] + list(airports_data.keys())
@@ -365,11 +421,9 @@ def main():
 
     # ── Sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.header("Search")
-
         currency = st.selectbox("Currency", CURRENCIES)
 
-        st.subheader("Route")
+        _section("Route")
         origin_city = st.selectbox("Origin city", city_list, index=0)
         origin_iatas: list = []
         if origin_city:
@@ -386,7 +440,7 @@ def main():
             sel = st.multiselect("Destination airport(s)", opts, default=opts)
             dest_iatas = [s.split(" – ")[0] for s in sel]
 
-        st.subheader("Dates")
+        _section("Dates")
         round_trip = st.checkbox("Round trip", value=True)
         today = date.today()
 
@@ -409,19 +463,20 @@ def main():
         dow_sel = st.multiselect("Days of week (empty = all)", DAYS, default=[])
         dow_idx = [DAYS.index(d) for d in dow_sel]
 
-        st.subheader("Departure times")
+        _section("Departure times")
         out_window = st.slider("Outbound departure (h)", 0, 24, (0, 24), format="%d:00")
         in_window = (0, 24)
         if round_trip:
             in_window = st.slider("Return departure (h)", 0, 24, (0, 24), format="%d:00")
 
-        st.subheader("Passengers & Cabin")
-        adults = int(st.number_input("Adults (12+)", 1, 9, 1))
-        children = int(st.number_input("Children (2–11)", 0, 9, 0))
-        infants = int(st.number_input("Infants (<2)", 0, 9, 0))
+        _section("Passengers & Cabin")
+        _pc1, _pc2, _pc3 = st.columns(3)
+        adults = int(_pc1.number_input("Adults", 1, 9, 1))
+        children = int(_pc2.number_input("Children", 0, 9, 0))
+        infants = int(_pc3.number_input("Infants", 0, 9, 0))
         cabin_label = st.selectbox("Cabin", list(CABINS.keys()))
 
-        st.subheader("Filters")
+        _section("Filters")
         stops_label = st.selectbox("Max stops", ["Direct only", "Up to 1 stop", "Any"])
         stops_val = {"Any": None, "Direct only": 0, "Up to 1 stop": 1}[stops_label]
         max_price_input = int(st.number_input("Max price/person (0 = no limit)", 0, 10000, 0, step=50))
@@ -554,12 +609,26 @@ def main():
 
     # ── Display results (persists across reruns) ────────────────────────────────
     if not st.session_state.outbound_offers and not st.session_state.inbound_offers:
-        st.info("Configure your search in the sidebar and click **Search**.")
+        st.markdown(
+            "<div style='text-align:center;padding:5rem 1rem;color:#9ca3af'>"
+            "<p style='font-size:2rem;margin:0'>✈</p>"
+            "<p style='margin:0.5rem 0 0;font-size:0.875rem'>"
+            "Configure your search in the sidebar and click Search</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
         return
 
-    st.success(f"Found **{st.session_state.search_label}**")
-
-    sort_by = st.radio("Sort by", ["Price", "Duration", "Departure time"], horizontal=True)
+    col_count, col_sort = st.columns([2, 3])
+    with col_count:
+        st.markdown(
+            f"<p style='font-size:0.875rem;color:#6b7280;margin:0.45rem 0 0'>"
+            f"<span style='color:#16a34a;font-weight:600'>✓</span>"
+            f"&nbsp; {st.session_state.search_label}</p>",
+            unsafe_allow_html=True,
+        )
+    with col_sort:
+        sort_by = st.radio("Sort by", ["Price", "Duration", "Departure time"], horizontal=True, label_visibility="collapsed")
     sort_key = {
         "Price": lambda o: o.price_per_person,
         "Duration": lambda o: o.outbound.duration_minutes,
@@ -572,21 +641,17 @@ def main():
     out_df, out_stop = flights_to_df(out_sorted)
     in_df, in_stop = flights_to_df(in_sorted)
 
-    st.markdown(
-        "<style>[data-testid='stDataFrame'] img { max-height: 10px; }</style>",
-        unsafe_allow_html=True,
-    )
     _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
 
-    st.subheader("Outbound flights")
+    _result_heading("Outbound")
     st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     if st.session_state.inbound_offers:
-        st.subheader("Return flights")
+        _result_heading("Return")
         st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     # ── Timeline chart ──────────────────────────────────────────────────────────
-    st.subheader("Flight timeline")
+    _result_heading("Timeline")
     fig = make_flight_chart(
         st.session_state.outbound_offers,
         st.session_state.inbound_offers,
@@ -601,8 +666,9 @@ def main():
         buf.write("\nReturn flights\n")
         in_df.drop(columns=["Logo"], errors="ignore").to_csv(buf, index=False)
 
+    st.divider()
     st.download_button(
-        "Download CSV",
+        "⬇ Download CSV",
         buf.getvalue().encode(),
         file_name="flights.csv",
         mime="text/csv",
