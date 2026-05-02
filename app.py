@@ -161,12 +161,13 @@ def flights_to_df(offers: list) -> tuple:
     return df, is_stop
 
 
-def _apply_stop_style(df: pd.DataFrame, is_stop: list):
+def _apply_stop_style(df: pd.DataFrame, is_stop: list, dark: bool = False):
     stop_indices = {i for i, v in enumerate(is_stop) if v}
     if not stop_indices:
         return df
+    bg = "#1a2e1a" if dark else "#fffbe6"
     def _row_bg(row):
-        return ["background-color: #fffbe6" if row.name in stop_indices else "" for _ in row]
+        return [f"background-color: {bg}" if row.name in stop_indices else "" for _ in row]
     return df.style.apply(_row_bg, axis=1)
 
 
@@ -200,38 +201,130 @@ _CSS = """
 
 /* ── Airline logos ─────────────────────────────────────── */
 [data-testid="stDataFrame"] img { max-height: 10px; }
+
+/* ── Custom element classes ─────────────────────────────── */
+.ff-section {
+    font-size: 0.67rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.09em; color: #9ca3af; margin: 1.5rem 0 0.1rem;
+}
+.ff-heading {
+    font-size: 0.95rem; font-weight: 600; color: #111;
+    letter-spacing: -0.01em; margin: 1.75rem 0 0.4rem;
+}
+.ff-count { font-size: 0.875rem; color: #6b7280; margin: 0.45rem 0 0; }
+.ff-check { color: #16a34a; font-weight: 600; }
+</style>
+"""
+
+_CSS_DARK = """
+<style>
+/* ── Dark mode backgrounds ──────────────────────────────── */
+.stApp,
+[data-testid="stAppViewContainer"],
+section.main,
+.main .block-container {
+    background-color: #0d0d0d !important;
+    color: #d1d5db !important;
+}
+[data-testid="stHeader"] { background-color: #0d0d0d !important; }
+
+/* ── Sidebar ────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #111111 !important;
+    border-right-color: #222222 !important;
+}
+
+/* ── Custom element classes ─────────────────────────────── */
+.ff-section { color: #555f6d !important; }
+.ff-heading { color: #f0f0f0 !important; }
+.ff-count   { color: #9ca3af !important; }
+.ff-check   { color: #22c55e !important; }
+
+/* ── Markdown & widget text ─────────────────────────────── */
+.stMarkdown p, .stMarkdown span, .stMarkdown li { color: #d1d5db !important; }
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span { color: #9ca3af !important; }
+
+/* ── Select ─────────────────────────────────────────────── */
+[data-baseweb="select"] > div:first-child {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+}
+[data-baseweb="select"] span { color: #d1d5db !important; }
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="menu"] ul { background-color: #1a1a1a !important; }
+[data-baseweb="option"] { color: #d1d5db !important; background-color: #1a1a1a !important; }
+li[aria-selected="true"] { background-color: #252525 !important; }
+
+/* ── Text / number input ────────────────────────────────── */
+[data-baseweb="input"] > div {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+}
+[data-baseweb="input"] input {
+    color: #d1d5db !important;
+    background: transparent !important;
+    caret-color: #d1d5db !important;
+}
+
+/* ── Multiselect tags ───────────────────────────────────── */
+[data-baseweb="tag"] { background-color: #252525 !important; }
+[data-baseweb="tag"] span { color: #d1d5db !important; }
+
+/* ── Toggle / checkbox / radio ──────────────────────────── */
+[data-testid="stToggle"] p,
+[data-testid="stCheckbox"] p,
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] p { color: #d1d5db !important; }
+
+/* ── Progress bar ───────────────────────────────────────── */
+[data-testid="stProgressBar"] > div { background-color: #222 !important; }
+[data-testid="stProgressBar"] > div > div { background-color: #22c55e !important; }
+
+/* ── Caption / divider ──────────────────────────────────── */
+[data-testid="stCaptionContainer"] p { color: #6b7280 !important; }
+hr { border-color: #2a2a2a !important; }
+
+/* ── Download button ────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+    background-color: #1a1a1a !important;
+    border-color: #2d2d2d !important;
+    color: #d1d5db !important;
+}
+
+/* ── Alert boxes ────────────────────────────────────────── */
+[data-testid="stAlert"] { background-color: #141f14 !important; }
+[data-testid="stAlert"] p { color: #d1d5db !important; }
 </style>
 """
 
 
 def _section(label: str) -> None:
-    st.markdown(
-        f"<p style='font-size:0.67rem;font-weight:700;text-transform:uppercase;"
-        f"letter-spacing:0.09em;color:#9ca3af;margin:1.5rem 0 0.1rem'>{label}</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<p class='ff-section'>{label}</p>", unsafe_allow_html=True)
 
 
 def _result_heading(label: str) -> None:
-    st.markdown(
-        f"<h3 style='font-size:0.95rem;font-weight:600;color:#111;"
-        f"letter-spacing:-0.01em;margin:1.75rem 0 0.4rem'>{label}</h3>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<h3 class='ff-heading'>{label}</h3>", unsafe_allow_html=True)
 
 
-def make_flight_chart(outbound_offers: list, inbound_offers: list):
+def make_flight_chart(outbound_offers: list, inbound_offers: list, dark: bool = False):
     def _hour(dt) -> float:
         return dt.hour + dt.minute / 60
 
     def _price_color(p: float, min_p: float, max_p: float) -> str:
         t = max(0.0, min(1.0, (p - min_p) / (max_p - min_p) if max_p > min_p else 0.0))
-        if t <= 0.5:
-            s = t * 2
-            r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
+        if dark:
+            # light mint (cheap) → dark forest green (expensive)
+            r = round(134 + (20 - 134) * t)
+            g = round(239 + (83 - 239) * t)
+            b = round(172 + (45 - 172) * t)
         else:
-            s = (t - 0.5) * 2
-            r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
+            if t <= 0.5:
+                s = t * 2
+                r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
+            else:
+                s = (t - 0.5) * 2
+                r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
         return f"rgb({r},{g},{b})"
 
     all_prices = [o.price_per_person for o in outbound_offers + inbound_offers]
@@ -240,7 +333,11 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
 
     min_p = min(all_prices)
     max_p = max(all_prices) if max(all_prices) > min(all_prices) else min(all_prices) + 1
-    colorscale = [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
+    colorscale = (
+        [[0, "#86efac"], [0.5, "#22c55e"], [1, "#14532d"]]
+        if dark else
+        [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
+    )
 
     has_inbound = bool(inbound_offers)
     n_cols = 2 if has_inbound else 1
@@ -340,10 +437,10 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
                 f"{currency} {o.price_per_person:.0f} / pax"
             )
             if o.outbound.stops > 0:
-                border_colors.append("rgba(0,0,0,0.85)")
+                border_colors.append("rgba(255,255,255,0.5)" if dark else "rgba(0,0,0,0.85)")
                 border_widths.append(1.5)
             else:
-                border_colors.append("rgba(0,0,0,0.15)")
+                border_colors.append("rgba(255,255,255,0.1)" if dark else "rgba(0,0,0,0.15)")
                 border_widths.append(0.4)
 
         fig.add_trace(go.Bar(
@@ -375,7 +472,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
         fig.update_xaxes(
             tickmode="array", tickvals=tick_vals_x, ticktext=tick_texts_x,
             range=[-0.6, x_max + 0.6],
-            showgrid=False, tickfont=dict(size=11),
+            showgrid=False, tickfont=dict(size=11, color="#9ca3af" if dark else "#444"),
             row=1, col=col,
         )
 
@@ -387,21 +484,28 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list):
     tick_text_y = [f"{h:02d}:00" for h in tick_vals_y]
     fig.update_yaxes(
         range=[24, 0], tickvals=tick_vals_y, ticktext=tick_text_y,
-        gridcolor="rgba(0,0,0,0.08)", zeroline=False, tickfont=dict(size=10),
+        gridcolor="rgba(255,255,255,0.05)" if dark else "rgba(0,0,0,0.08)",
+        zeroline=False, tickfont=dict(size=10, color="#9ca3af" if dark else "#444"),
     )
     fig.update_layout(
         barmode="overlay",
         height=660, showlegend=False,
-        plot_bgcolor="#f8f9fa", paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#141414" if dark else "#f8f9fa",
+        paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=50, b=20, l=60, r=90),
-        hoverlabel=dict(bgcolor="white", font_size=13),
+        hoverlabel=dict(bgcolor="#1e1e1e" if dark else "white", font_size=13,
+                        font_color="#d1d5db" if dark else "#111"),
     )
+    if dark:
+        fig.update_annotations(font=dict(color="#9ca3af"))
     return fig
 
 
 def main():
     st.set_page_config(page_title="Flight Finder", page_icon="✈", layout="wide")
     st.markdown(_CSS, unsafe_allow_html=True)
+    if st.session_state.get("dark_mode"):
+        st.markdown(_CSS_DARK, unsafe_allow_html=True)
     st.markdown(
         "<h1 style='font-size:1.6rem;font-weight:700;letter-spacing:-0.03em;"
         "margin:0 0 1.25rem;line-height:1.2'>✈ &nbsp;Flight Finder</h1>",
@@ -420,6 +524,7 @@ def main():
 
     # ── Sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
+        st.toggle("Dark mode", key="dark_mode")
         currency = st.selectbox("Currency", CURRENCIES)
 
         _section("Route")
@@ -625,8 +730,7 @@ def main():
     col_count, col_sort = st.columns([2, 3])
     with col_count:
         st.markdown(
-            f"<p style='font-size:0.875rem;color:#6b7280;margin:0.45rem 0 0'>"
-            f"<span style='color:#16a34a;font-weight:600'>✓</span>"
+            f"<p class='ff-count'><span class='ff-check'>✓</span>"
             f"&nbsp; {st.session_state.search_label}</p>",
             unsafe_allow_html=True,
         )
@@ -644,20 +748,22 @@ def main():
     out_df, out_stop = flights_to_df(out_sorted)
     in_df, in_stop = flights_to_df(in_sorted)
 
+    dark = st.session_state.get("dark_mode", False)
     _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
 
     _result_heading("Outbound")
-    st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
+    st.dataframe(_apply_stop_style(out_df, out_stop, dark=dark), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     if st.session_state.inbound_offers:
         _result_heading("Return")
-        st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
+        st.dataframe(_apply_stop_style(in_df, in_stop, dark=dark), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     # ── Timeline chart ──────────────────────────────────────────────────────────
     _result_heading("Timeline")
     fig = make_flight_chart(
         st.session_state.outbound_offers,
         st.session_state.inbound_offers,
+        dark=dark,
     )
     if fig:
         st.plotly_chart(fig, use_container_width=True)
