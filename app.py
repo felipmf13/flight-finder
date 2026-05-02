@@ -295,6 +295,38 @@ hr { border-color: #2a2a2a !important; }
 /* ── Alert boxes ────────────────────────────────────────── */
 [data-testid="stAlert"] { background-color: #141f14 !important; }
 [data-testid="stAlert"] p { color: #d1d5db !important; }
+
+/* ── Green accent (replaces Streamlit default blue) ─────── */
+/* Checkbox checked */
+[data-baseweb="checkbox"] [aria-checked="true"] > div,
+[data-baseweb="checkbox"] [data-checked="true"] > div {
+    background-color: #22c55e !important;
+    border-color: #22c55e !important;
+}
+/* Radio selected dot */
+[data-baseweb="radio"] [aria-checked="true"] div,
+[data-baseweb="radio"] [data-checked="true"] div {
+    background-color: #22c55e !important;
+    border-color: #22c55e !important;
+    box-shadow: none !important;
+}
+/* Toggle on */
+[data-testid="stToggle"] input:checked ~ div {
+    background-color: #22c55e !important;
+}
+/* Focused input / select border */
+[data-baseweb="input"]:focus-within > div {
+    border-color: #22c55e !important;
+}
+[data-baseweb="select"]:focus-within > div:first-child {
+    border-color: #22c55e !important;
+}
+/* Multiselect tag */
+[data-baseweb="tag"] {
+    background-color: #14532d !important;
+    border-color: #22c55e !important;
+}
+[data-baseweb="tag"] span { color: #d1d5db !important; }
 </style>
 """
 
@@ -313,18 +345,12 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list, dark: bool = 
 
     def _price_color(p: float, min_p: float, max_p: float) -> str:
         t = max(0.0, min(1.0, (p - min_p) / (max_p - min_p) if max_p > min_p else 0.0))
-        if dark:
-            # light mint (cheap) → dark forest green (expensive)
-            r = round(134 + (20 - 134) * t)
-            g = round(239 + (83 - 239) * t)
-            b = round(172 + (45 - 172) * t)
+        if t <= 0.5:
+            s = t * 2
+            r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
         else:
-            if t <= 0.5:
-                s = t * 2
-                r, g, b = round(39 + (241 - 39) * s), round(174 + (193 - 174) * s), round(96 + (15 - 96) * s)
-            else:
-                s = (t - 0.5) * 2
-                r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
+            s = (t - 0.5) * 2
+            r, g, b = round(241 + (231 - 241) * s), round(193 + (76 - 193) * s), round(15 + (60 - 15) * s)
         return f"rgb({r},{g},{b})"
 
     all_prices = [o.price_per_person for o in outbound_offers + inbound_offers]
@@ -333,11 +359,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list, dark: bool = 
 
     min_p = min(all_prices)
     max_p = max(all_prices) if max(all_prices) > min(all_prices) else min(all_prices) + 1
-    colorscale = (
-        [[0, "#86efac"], [0.5, "#22c55e"], [1, "#14532d"]]
-        if dark else
-        [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
-    )
+    colorscale = [[0, "#27ae60"], [0.5, "#f1c40f"], [1, "#e74c3c"]]
 
     has_inbound = bool(inbound_offers)
     n_cols = 2 if has_inbound else 1
