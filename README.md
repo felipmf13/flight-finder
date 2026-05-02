@@ -3,8 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B.svg)](https://streamlit.io)
-[![Last Commit](https://img.shields.io/github/last-commit/felipmf13/flight-finder)](https://github.com/felipmf13/flight-finder/commits/main)
-[![Stars](https://img.shields.io/github/stars/felipmf13/flight-finder?style=flat)](https://github.com/felipmf13/flight-finder/stargazers)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/felipmf13/flight-finder/pulls)
+[![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/felipmf13/flight-finder)
 
 Search Google Flights across multiple dates and routes from a clean web UI — no API key required.
 
