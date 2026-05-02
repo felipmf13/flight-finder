@@ -104,6 +104,12 @@ def _date_range(raw) -> tuple:
     return raw, raw
 
 
+def _airline_logo_url(code: str) -> str:
+    if not code or len(code) < 2 or "?" in code:
+        return ""
+    return f"https://www.gstatic.com/flights/airline_logos/70px/{code.upper()}.png"
+
+
 def flights_to_df(offers: list) -> tuple:
     """Return (DataFrame, list[bool]) where True marks a segment sub-row (yellowish)."""
     rows = []
@@ -112,7 +118,9 @@ def flights_to_df(offers: list) -> tuple:
         segments = o.outbound.segments
         if len(segments) <= 1:
             dur = o.outbound.duration_minutes
+            airline_code = segments[0].airline if segments else ""
             rows.append({
+                "Logo": _airline_logo_url(airline_code),
                 "Airline": o.outbound.airline_name or o.outbound.airline,
                 "Route": f"{o.outbound.origin} → {o.outbound.destination}",
                 "Date": o.outbound.departure.strftime("%Y-%m-%d"),
@@ -133,6 +141,7 @@ def flights_to_df(offers: list) -> tuple:
                 dep_str = seg.departure.strftime("%H:%M") + ("" if i == 0 else " (est.)")
                 arr_str = seg.arrival.strftime("%H:%M") + ("" if i == last else " (est.)")
                 rows.append({
+                    "Logo": _airline_logo_url(seg.airline),
                     "Airline": seg.airline_name or seg.airline,
                     "Route": f"{seg.origin} → {seg.destination}",
                     "Date": seg.departure.strftime("%Y-%m-%d") if i == 0 else "↳",
@@ -563,12 +572,18 @@ def main():
     out_df, out_stop = flights_to_df(out_sorted)
     in_df, in_stop = flights_to_df(in_sorted)
 
+    st.markdown(
+        "<style>[data-testid='stDataFrame'] img { max-height: 10px; }</style>",
+        unsafe_allow_html=True,
+    )
+    _logo_col_cfg = {"Logo": st.column_config.ImageColumn("", width="small")}
+
     st.subheader("Outbound flights")
-    st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True)
+    st.dataframe(_apply_stop_style(out_df, out_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     if st.session_state.inbound_offers:
         st.subheader("Return flights")
-        st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True)
+        st.dataframe(_apply_stop_style(in_df, in_stop), use_container_width=True, hide_index=True, column_config=_logo_col_cfg)
 
     # ── Timeline chart ──────────────────────────────────────────────────────────
     st.subheader("Flight timeline")
@@ -581,10 +596,10 @@ def main():
 
     buf = io.StringIO()
     buf.write("Outbound flights\n")
-    out_df.to_csv(buf, index=False)
+    out_df.drop(columns=["Logo"], errors="ignore").to_csv(buf, index=False)
     if st.session_state.inbound_offers:
         buf.write("\nReturn flights\n")
-        in_df.to_csv(buf, index=False)
+        in_df.drop(columns=["Logo"], errors="ignore").to_csv(buf, index=False)
 
     st.download_button(
         "Download CSV",
