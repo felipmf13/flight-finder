@@ -4,6 +4,7 @@ import json
 import re
 import sys
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -459,10 +460,6 @@ def main():
         all_outbound: list = []
         all_inbound: list = []
 
-        n_out = len(outbound_dates)
-        n_in = len(inbound_dates)
-        total_steps = len(combos) * (2 if round_trip else 1)
-
         # Fields shared by both outbound and return configs
         common_cfg = dict(
             inbound_dates=[],
@@ -481,59 +478,62 @@ def main():
             sort_by="price",
         )
 
+        # Build one task per independent search (outbound + optional return per combo)
+        tasks = []
+        for orig, dest in combos:
+            tasks.append({
+                "direction": "Outbound",
+                "origin": AirportConfig(city=origin_city, iata=orig),
+                "destination": AirportConfig(city=dest_city, iata=dest),
+                "dates": outbound_dates,
+                "window": out_window,
+            })
+            if round_trip:
+                tasks.append({
+                    "direction": "Return",
+                    "origin": AirportConfig(city=dest_city, iata=dest),
+                    "destination": AirportConfig(city=origin_city, iata=orig),
+                    "dates": inbound_dates,
+                    "window": in_window,
+                })
+
+        total_tasks = len(tasks)
         progress_box = st.empty()
         search_errors: list = []
 
-        def _show_progress(step: int, direction: str, route: str, n_dates: int) -> None:
-            with progress_box.container():
-                col_l, col_r = st.columns([6, 1])
-                col_l.markdown(f"**{direction}** &nbsp; {route}")
-                col_r.markdown(
-                    f"<div style='text-align:right;color:#888;font-size:0.85em'>"
-                    f"{step}&thinsp;/&thinsp;{total_steps}</div>",
-                    unsafe_allow_html=True,
-                )
-                st.progress(step / total_steps)
-                st.caption(f"{n_dates} date{'s' if n_dates != 1 else ''} · fetching…")
+        def _run_task(t: dict) -> tuple:
+            w = t["window"]
+            cfg = SearchConfig(
+                origin=t["origin"],
+                destination=t["destination"],
+                outbound_dates=t["dates"],
+                outbound_departure_window=TimeWindow(
+                    earliest=_window_str(w[0], False),
+                    latest=_window_str(w[1], True),
+                ),
+                **common_cfg,
+            )
+            return t["direction"], run_search(cfg)
 
-        step = 0
-        for orig, dest in combos:
-            step += 1
-            _show_progress(step, "Outbound", f"{orig} → {dest}", n_out)
-            try:
-                cfg = SearchConfig(
-                    origin=AirportConfig(city=origin_city, iata=orig),
-                    destination=AirportConfig(city=dest_city, iata=dest),
-                    outbound_dates=outbound_dates,
-                    outbound_departure_window=TimeWindow(
-                        earliest=_window_str(out_window[0], False),
-                        latest=_window_str(out_window[1], True),
-                    ),
-                    **common_cfg,
-                )
-                offers = run_search(cfg)
-                all_outbound.extend(offers)
-            except Exception as e:
-                search_errors.append(str(e))
-
-            if round_trip:
-                step += 1
-                _show_progress(step, "Return", f"{dest} → {orig}", n_in)
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(_run_task, t): t for t in tasks}
+            done = 0
+            for future in as_completed(futures):
+                done += 1
                 try:
-                    cfg_ret = SearchConfig(
-                        origin=AirportConfig(city=dest_city, iata=dest),
-                        destination=AirportConfig(city=origin_city, iata=orig),
-                        outbound_dates=inbound_dates,
-                        outbound_departure_window=TimeWindow(
-                            earliest=_window_str(in_window[0], False),
-                            latest=_window_str(in_window[1], True),
-                        ),
-                        **common_cfg,
-                    )
-                    ret_offers = run_search(cfg_ret)
-                    all_inbound.extend(ret_offers)
+                    direction, offers = future.result()
+                    (all_outbound if direction == "Outbound" else all_inbound).extend(offers)
                 except Exception as e:
                     search_errors.append(str(e))
+                with progress_box.container():
+                    col_l, col_r = st.columns([6, 1])
+                    col_l.markdown("**Searching…**")
+                    col_r.markdown(
+                        f"<div style='text-align:right;color:#888;font-size:0.85em'>"
+                        f"{done}&thinsp;/&thinsp;{total_tasks}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.progress(done / total_tasks)
 
         progress_box.empty()
         for err in search_errors:
