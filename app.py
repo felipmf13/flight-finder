@@ -531,7 +531,7 @@ def make_flight_chart(outbound_offers: list, inbound_offers: list, dark: bool = 
     fig.update_layout(
         barmode="overlay",
         height=660, showlegend=False,
-        plot_bgcolor="#141414" if dark else "#f8f9fa",
+        plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=50, b=20, l=60, r=90),
         hoverlabel=dict(bgcolor="#1e1e1e" if dark else "white", font_size=13,
