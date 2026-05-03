@@ -67,6 +67,8 @@ Run `streamlit run app.py` and use the sidebar to configure:
 
 Results are shown as a sortable table (by price, duration, or departure time) and an interactive timeline chart.
 
+![Flight Finder screenshot](docs/screenshot.png)
+
 ---
 
 ## CLI
