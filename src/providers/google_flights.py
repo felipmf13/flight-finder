@@ -31,6 +31,25 @@ from ..models import FlightOffer, Itinerary, Segment
 _LAYOVER_ESTIMATE_MIN = 45   # fabricated layover used when stop times are unknown
 _INBOUND_TOP_N = 5           # max inbound options stored per return date
 
+# TLS fingerprint to impersonate. Must be in the installed primp's version range
+# (primp 1.2.x recognises chrome_144–146; older ids silently fall back to random).
+_DEFAULT_IMPERSONATE = "chrome_146"
+
+# Markers that only appear when Google serves a consent wall or bot-block page
+# instead of flight results. Verified absent from valid results pages, so matching
+# any of these reliably means "blocked" rather than "genuinely no flights".
+_BLOCK_MARKERS = (
+    "our systems have detected unusual traffic",
+    "/sorry/index",
+    "consent.google.com",
+    "before you continue to google",
+)
+
+
+def _looks_blocked(html: str) -> bool:
+    low = html.lower()
+    return any(m in low for m in _BLOCK_MARKERS)
+
 
 def search(cfg: SearchConfig) -> list:
     try:
@@ -51,8 +70,12 @@ def search(cfg: SearchConfig) -> list:
         infants_on_lap=cfg.infants,
     )
 
-    # Single client reused across all requests (avoids repeated TLS handshakes)
-    client = primp.Client(impersonate=os.getenv("PRIMP_IMPERSONATE", "chrome_126"))
+    # Single client reused across all requests (avoids repeated TLS handshakes).
+    # The impersonate target must be one primp's installed version recognises, or
+    # it silently falls back to a *random* fingerprint (some of which Google blocks).
+    # primp drops old Chrome versions on upgrades, so this needs an occasional bump —
+    # override via PRIMP_IMPERSONATE if your primp build supports a different range.
+    client = primp.Client(impersonate=os.getenv("PRIMP_IMPERSONATE", _DEFAULT_IMPERSONATE))
     delay = cfg.request_delay_seconds
 
     def _fetch(from_iata: str, to_iata: str, d: date) -> str:
@@ -65,7 +88,14 @@ def search(cfg: SearchConfig) -> list:
         )
         params = {"tfs": tfs.as_b64().decode(), "hl": "en", "tfu": "EgQIABABIgA", "curr": cfg.currency}
         resp = client.get("https://www.google.com/travel/flights", params=params, cookies={"SOCS": "CAI"})
-        return resp.text
+        html = resp.text
+        if _looks_blocked(html):
+            raise RuntimeError(
+                "Google blocked this request (consent wall or 'unusual traffic' page). "
+                "This is common on shared/datacenter IPs (e.g. cloud hosting). "
+                "Wait a minute and retry, run it locally, or route through a proxy."
+            )
+        return html
 
     # Pre-fetch top inbound options per return date (round-trip only)
     inbound_best: dict = {}   # date -> list of (fd, itin), sorted cheapest-first

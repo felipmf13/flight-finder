@@ -753,7 +753,16 @@ def main():
         st.session_state.search_label = label
 
         if not all_outbound and not all_inbound:
-            st.error("No results found. Try adjusting your filters or expanding the date range.")
+            if search_errors:
+                # The search failed (e.g. Google blocked this server) rather than
+                # succeeding with an empty result — don't blame the user's filters.
+                st.error(
+                    "The search couldn't complete — see the warning(s) above. "
+                    "This usually means Google temporarily blocked this server; "
+                    "wait a minute and try again."
+                )
+            else:
+                st.error("No results found. Try adjusting your filters or expanding the date range.")
             return
 
     # ── Display results (persists across reruns) ────────────────────────────────
