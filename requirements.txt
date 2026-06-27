@@ -1,7 +1,11 @@
 # Python 3.10+ required. Tested on Python 3.14.
 
-# --- Google Flights provider dependencies (installed transitively via fast-flights) ---
-fast-flights>=2.2.0   # primp, selectolax, protobuf pulled in automatically
+# --- Google Flights provider dependencies ---
+# Pinned: primp drops old browser fingerprints on upgrades, which silently breaks
+# the impersonate target in src/providers/google_flights.py (_DEFAULT_IMPERSONATE).
+# Bump primp and _DEFAULT_IMPERSONATE together when refreshing.
+fast-flights==2.2     # pulls in selectolax, protobuf
+primp==1.2.3          # impersonate range must match _DEFAULT_IMPERSONATE (chrome_146)
 
 # --- Core ---
 pyyaml>=6.0.0
