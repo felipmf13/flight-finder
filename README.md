@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B.svg)](https://streamlit.io)
+[![Release](https://img.shields.io/github/v/release/felipmf13/flight-finder?include_prereleases)](https://github.com/felipmf13/flight-finder/releases)
 
 **Live app: [https://flight-finder-one.streamlit.app/](https://flight-finder-one.streamlit.app/)**
 
